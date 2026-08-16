@@ -110,3 +110,13 @@ Como configurar (os dois usam o MESMO link do app e o MESMO banco Firebase):
 Pronto: na aba Dieta aparece o painel do outro — peso e variação em 7 dias (com mini-gráfico), refeições da semana marcadas, proteína real vs meta e custo/mês da dieta. Atualiza sozinho a cada minuto, ao voltar pro app, ou no botão "atualizar agora".
 
 **Privacidade:** a chave de acompanhamento só dá acesso a esse resumo — quem a tem não vê nem edita seus dados. A chave de sincronização continua sendo a "senha" dos seus dados: essa não se compartilha.
+
+## Pareamento rápido (QR + link)
+
+Em **Ajustes → Pareamento rápido** há três opções:
+
+- **📱 Parear meus aparelhos** — QR/link que configura outro aparelho como a SUA conta (mesma sincronização). ⚠️ Dá acesso total: escaneie você mesmo ou envie apenas para você (ex: "mensagens salvas").
+- **❤️ Convidar o par** — QR/link que dá ao outro apenas o seu painel de acompanhamento (peso, refeições, custo). Seguro para mandar por mensagem. Quem aceita já recebe a sugestão de gerar o convite de volta, fechando o acompanhamento nos dois sentidos.
+- **📷 Escanear um pareamento** — lê o QR mostrado em outro aparelho (ou cole o link recebido).
+
+Abrir um link de pareamento no navegador configura o app automaticamente, com tela de confirmação antes. Se um link vazar, basta gerar uma chave nova em Ajustes — o link antigo morre.

@@ -610,6 +610,23 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     </div>
 
     <div class="lcard">
+      <div class="cardtitle">Pareamento rápido</div>
+      <div class="row" style="cursor:pointer;" onclick="openPairSheet('sync')">
+        <div class="grow"><div class="rtitle">📱 Parear meus aparelhos</div><div class="rsub">QR/link que configura outro aparelho como a SUA conta</div></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="row" style="cursor:pointer;" onclick="openPairSheet('share')">
+        <div class="grow"><div class="rtitle">❤️ Convidar o par</div><div class="rsub">QR/link que dá ao outro só o seu painel de acompanhamento</div></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="row" style="cursor:pointer;" onclick="openPairScanner()">
+        <div class="grow"><div class="rtitle">📷 Escanear um pareamento</div><div class="rsub">aponte a câmera para o QR mostrado no outro aparelho</div></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="cardnote">Também dá pra mandar o link por mensagem — quem abre o link é configurado automaticamente (ideal à distância).</div>
+    </div>
+
+    <div class="lcard">
       <div class="cardtitle">Nota fiscal (NFC-e)</div>
       <div class="formgrid" style="padding:8px 20px 4px;">
         <label>URL do leitor de notas (Cloudflare Worker)</label>
@@ -2056,6 +2073,157 @@ function renderPartner(){
     </div>`;
 }
 
+/* ==================== PAREAMENTO (QR + LINK) ==================== */
+function encPair(obj){
+  return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function decPair(s){
+  s=String(s).replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length%4) s+='=';
+  return JSON.parse(decodeURIComponent(escape(atob(s))));
+}
+function pairLink(payload){
+  return location.origin+location.pathname+'#parear='+encPair(payload);
+}
+async function drawQR(elId, text){
+  try{
+    if(!window.QRCode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+    const el=$(elId); if(!el) return;
+    el.innerHTML='';
+    new QRCode(el, {text, width:210, height:210, correctLevel:QRCode.CorrectLevel.M});
+  }catch(e){
+    const el=$(elId);
+    if(el) el.innerHTML='<div class="cardnote">QR indisponível agora (sem internet?) — use o link abaixo.</div>';
+  }
+}
+function openPairSheet(type){
+  if(!sync.dbUrl){ toast('Configure a URL do banco em Sincronização primeiro'); return; }
+  let payload, title, warn;
+  if(type==='sync'){
+    if(!sync.syncKey){ toast('Gere e conecte sua chave de sincronização primeiro'); return; }
+    payload={t:'sync', db:sync.dbUrl, k:sync.syncKey};
+    title='Parear meus aparelhos';
+    warn='<div class="cardnote" style="color:var(--red); padding:0 0 10px;">⚠️ Este código dá acesso TOTAL à sua conta. Escaneie você mesmo ou envie só por canal privado, para você mesmo.</div>';
+  }else{
+    if(!state.couple.shareKey){
+      /* gera automaticamente */
+      const chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let k='ac'; const arr=new Uint32Array(22); crypto.getRandomValues(arr);
+      for(let i=0;i<22;i++) k+=chars[arr[i]%chars.length];
+      state.couple.shareKey=k;
+      save(); pushSummary();
+    }
+    payload={t:'share', db:sync.dbUrl, k:state.couple.shareKey, n:state.couple.myName||''};
+    title='Convidar o par';
+    warn='<div class="cardnote" style="padding:0 0 10px;">Este código dá acesso só ao seu painel de resumo (peso, refeições, custo) — não aos seus dados. Pode mandar por mensagem tranquilo.</div>';
+  }
+  const link=pairLink(payload);
+  openSheet(`
+    <h3>${title}</h3>
+    ${warn}
+    <div id="pairQR" style="display:flex; justify-content:center; padding:8px; background:#fff; border-radius:16px; width:min(240px,100%); margin:0 auto;"></div>
+    <label style="font-size:12.5px; font-weight:700; color:var(--ink2); display:block; margin-top:14px;">ou envie o link:</label>
+    <input class="field" id="pairLinkField" readonly value="${esc(link)}" style="margin-top:6px; font-size:11px;">
+    <button class="btn tint block" style="margin-top:10px;" onclick="copyPairLink()">copiar link</button>
+    <div class="cardnote" style="padding-top:10px;">No outro aparelho: escaneie o QR (Ajustes → Escanear pareamento, ou a câmera do celular) ou abra o link — a configuração é automática.</div>
+  `);
+  drawQR('pairQR', link);
+}
+function copyPairLink(){
+  const el=$('pairLinkField');
+  el.select();
+  try{
+    navigator.clipboard.writeText(el.value).then(()=>toast('Link copiado ✓'));
+  }catch(e){
+    document.execCommand('copy'); toast('Link copiado ✓');
+  }
+}
+function openPairScanner(){
+  openSheet(`
+    <h3>Escanear pareamento</h3>
+    <p class="ssub">Aponte para o QR mostrado no outro aparelho.</p>
+    <div id="scanReader"></div>
+    <div class="cardnote" id="scanStatus" style="padding:0 0 10px;">abrindo câmera…</div>
+    <label style="font-size:12.5px; font-weight:700; color:var(--ink2);">ou cole o link recebido:</label>
+    <div style="display:flex; gap:8px; margin-top:6px;">
+      <input class="field" id="pairPasteField" placeholder="https://…#parear=…" style="flex:1;">
+      <button class="btn tint" onclick="handlePairText($('pairPasteField').value.trim())">ok</button>
+    </div>`);
+  scanMode='pair';
+  startScan();
+}
+function handlePairText(text){
+  const m=String(text||'').match(/#parear=([A-Za-z0-9_\-]+)/);
+  if(!m){ toast('Isso não parece um código de pareamento'); return; }
+  try{ applyPairPayload(decPair(m[1])); }
+  catch(e){ toast('Código de pareamento inválido'); }
+}
+function applyPairPayload(p){
+  if(!p||!p.db||!p.k){ toast('Código de pareamento inválido'); return; }
+  window._pairDraft=p;
+  if(p.t==='sync'){
+    openSheet(`
+      <h3>Parear este aparelho</h3>
+      <p class="ssub">Este código conecta este aparelho a uma conta existente.</p>
+      <div class="cardnote" style="color:var(--red); padding:0 0 12px;">⚠️ Os dados locais deste aparelho serão substituídos pelos da conta pareada na próxima sincronização.</div>
+      <button class="btn tint block" onclick="confirmPairSync()">Conectar a esta conta</button>
+      <button class="btn plain block" style="margin-top:8px;" onclick="closeSheet()">Cancelar</button>
+    `);
+  }else if(p.t==='share'){
+    openSheet(`
+      <h3>Convite de acompanhamento</h3>
+      <p class="ssub">${p.n?esc(p.n)+' quer':'Alguém quer'} compartilhar o painel de progresso com você (peso, refeições, custo). Seus dados continuam só seus.</p>
+      <button class="btn tint block" onclick="confirmPairShare()">Aceitar e acompanhar</button>
+      <button class="btn plain block" style="margin-top:8px;" onclick="closeSheet()">Agora não</button>
+    `);
+  }else{
+    toast('Tipo de pareamento desconhecido');
+  }
+}
+function confirmPairSync(){
+  const p=window._pairDraft; if(!p) return;
+  sync.dbUrl=p.db; sync.syncKey=p.k;
+  try{ localStorage.setItem(LS_SYNC,JSON.stringify(sync)); }catch(e){}
+  $('dbUrl').value=sync.dbUrl; $('syncKey').value=sync.syncKey;
+  window._pairDraft=null;
+  closeSheet();
+  setSyncStatus('pareado — conectando…');
+  state.updatedAt=0;   /* garante que a nuvem vence */
+  cloudPull(true).then(ok=>{ if(ok) startPolling(); });
+  toast('Aparelho pareado ✓');
+}
+function confirmPairShare(){
+  const p=window._pairDraft; if(!p) return;
+  if(!sync.dbUrl){
+    sync.dbUrl=p.db;
+    try{ localStorage.setItem(LS_SYNC,JSON.stringify(sync)); }catch(e){}
+  }
+  state.couple.partnerKey=p.k;
+  window._pairDraft=null;
+  closeSheet(); render(); save();
+  fetchPartner(true);
+  const mine = state.couple.shareKey;
+  setTimeout(()=>{
+    openSheet(`
+      <h3>Acompanhamento ativado ✓</h3>
+      <p class="ssub">Agora feche o círculo: mande seu convite de volta para ${p.n?esc(p.n):'o par'} te acompanhar também.</p>
+      <button class="btn tint block" onclick="openPairSheet('share')">Gerar meu convite</button>
+      <button class="btn plain block" style="margin-top:8px;" onclick="closeSheet()">Depois</button>
+    `);
+  }, 600);
+}
+/* link de pareamento na abertura do app */
+(function(){
+  const m=location.hash.match(/#parear=([A-Za-z0-9_\-]+)/);
+  if(m){
+    try{
+      const p=decPair(m[1]);
+      history.replaceState(null,'',location.pathname+location.search);
+      window._pairOnLoad=p;
+    }catch(e){}
+  }
+})();
+
 /* ==================== FASE 1: NORMALIZADO / TROCA / SCANNER ==================== */
 function normPrice(f, p){
   if(!f || p<=0) return '';
@@ -2159,6 +2327,7 @@ async function fetchOFF(code){
   };
 }
 async function onBarcode(code){
+  if(scanMode==='pair'){ await stopScan(); handlePairText(code); return; }
   if(scanMode==='nfce'){ await stopScan(); importNfce(code); return; }
   await stopScan();
   toast('Buscando produto…');
@@ -2659,6 +2828,10 @@ goTab(ui.tab||'dieta');
 })();
 loadSyncSettings();
 fetchPartner();
+if(window._pairOnLoad){
+  const p=window._pairOnLoad; window._pairOnLoad=null;
+  setTimeout(()=>{ goTab('ajustes'); applyPairPayload(p); }, 400);
+}
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
