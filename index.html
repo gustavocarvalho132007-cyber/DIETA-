@@ -346,6 +346,22 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 .nutlegend .lg-real::before{background:var(--blue);}
 .nutlegend .lg-band::before{background:var(--tint-soft); border:1px solid var(--tint);}
 .wchart{margin:12px 0; background:var(--fill); border-radius:16px; padding:12px;}
+.ingchip{
+  padding:8px 12px; border-radius:11px; border:none; cursor:pointer; font-family:inherit;
+  font-size:12.5px; font-weight:600; background:var(--fill); color:var(--ink2); width:auto; height:auto;
+}
+.ingchip.on{background:var(--tint); color:#fff;}
+.recipe-row{cursor:pointer;}
+.recipe-row .rtitle{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
+.recipe-row.locked{opacity:.55;}
+.adhoc-row{display:flex; align-items:center; gap:10px; padding:5px 0 5px 0;}
+.adhoc-row .adot{width:22px; text-align:center; font-size:13px; flex:none;}
+.adhoc-row .atxt{flex:1; font-size:12.5px; color:var(--tint-text); font-weight:600;}
+.srcbar{display:flex; align-items:center; gap:8px; margin:7px 0;}
+.srcbar .sname{width:110px; font-size:12.5px; font-weight:600; flex:none;}
+.srcbar .strack{flex:1; height:12px; background:var(--fill); border-radius:99px; overflow:hidden;}
+.srcbar .strack>div{height:100%; background:var(--tint); border-radius:99px;}
+.srcbar .spct{width:82px; text-align:right; font-size:11.5px; color:var(--ink2); font-variant-numeric:tabular-nums; flex:none;}
 #scanReader{border-radius:16px; overflow:hidden; background:#000; min-height:220px; margin-bottom:10px;}
 #scanReader video{width:100%; border-radius:16px;}
 .calcbox{background:var(--fill); border-radius:16px; padding:14px; margin-top:14px;}
@@ -401,6 +417,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     </div>
 
     <div id="swapBanner"></div>
+    <div id="partnerCard"></div>
 
     <div class="lcard">
       <div class="cardtitle">Nutrição do plano</div>
@@ -454,6 +471,18 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     <div class="lcard">
       <div class="cardtitle">Marmitas da semana (meal prep)</div>
       <div id="mealprepBox" style="padding:4px 20px 14px;"></div>
+    </div>
+
+    <div class="lcard">
+      <div class="cardtitle">O que dá pra cozinhar com o que você tem</div>
+      <div style="padding:4px 16px 6px;">
+        <div class="dlabel" style="font-size:12.5px; font-weight:700; color:var(--ink2);">Ingredientes em casa</div>
+        <div class="daychips" id="pantryChips"></div>
+        <div class="dlabel" style="font-size:12.5px; font-weight:700; color:var(--ink2); margin-top:10px;">Utensílios</div>
+        <div class="daychips" id="utensilChips"></div>
+      </div>
+      <div id="recipesList"></div>
+      <div class="cardnote">Receitas montadas só com os itens da sua dieta. Toque para ver o preparo e a nutrição por porção. "Falta 1" mostra o que resolver pra destravar a receita.</div>
     </div>
 
     <div class="lcard">
@@ -564,6 +593,23 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     </div>
 
     <div class="lcard">
+      <div class="cardtitle">Acompanhamento a dois ❤️</div>
+      <div class="formgrid" style="padding:8px 20px 4px;">
+        <label>Seu apelido (como aparece pro outro)</label>
+        <input class="field" id="c_myName" placeholder="ex: Thiago">
+        <label>Sua chave de acompanhamento (dê essa ao par)</label>
+        <input class="field" id="c_shareKey" placeholder="toque em gerar">
+        <label>Chave de acompanhamento do par (cole a que receber)</label>
+        <input class="field" id="c_partnerKey" placeholder="cole aqui">
+      </div>
+      <div style="display:flex; gap:8px; padding:10px 20px 8px; flex-wrap:wrap;">
+        <button class="btn plain compact" onclick="genShareKey()">gerar chave</button>
+        <button class="btn tint compact" onclick="saveCouple()">salvar</button>
+      </div>
+      <div class="cardnote">Cada um usa o app com <b>sua própria chave de sincronização</b> (dados 100% separados — dieta, mercados, metas). A chave de acompanhamento compartilha <b>só um resumo</b>: peso e variação, refeições da semana, proteína vs meta e custo/mês. Quem tem sua chave de acompanhamento não consegue ver nem mexer nos seus dados — só ver esse painel.</div>
+    </div>
+
+    <div class="lcard">
       <div class="cardtitle">Nota fiscal (NFC-e)</div>
       <div class="formgrid" style="padding:8px 20px 4px;">
         <label>URL do leitor de notas (Cloudflare Worker)</label>
@@ -668,6 +714,65 @@ const NUTRIENTS = [
 ];
 const DAY_NAMES=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 const MEAL_DEFS={cafe:{label:'Café da manhã', icon:'☕'}, almoco:{label:'Almoço', icon:'🍛'}, janta:{label:'Janta', icon:'🌙'}, lanche:{label:'Lanche', icon:'🍎'}};
+const UTENSILS=[
+  {id:'panela', name:'Panela / fogão'},
+  {id:'frigideira', name:'Frigideira'},
+  {id:'forno', name:'Forno'},
+  {id:'airfryer', name:'Airfryer'},
+  {id:'micro', name:'Micro-ondas'},
+  {id:'liqui', name:'Liquidificador'},
+];
+/* receitas com os ingredientes da dieta — qty na unidade de consumo do alimento; porção = 1 pessoa */
+const RECIPES=[
+  {id:'panqueca', name:'Panqueca de banana e aveia', time:'15 min', ut:['frigideira'],
+   ing:[{fid:'banana',q:1},{fid:'ovo',q:2},{fid:'aveia',q:40}], extra:'canela (opcional)',
+   steps:'Amasse a banana, misture os ovos e a aveia até virar massa. Despeje porções na frigideira antiaderente em fogo baixo e doure ~2 min de cada lado.'},
+  {id:'overnight', name:'Aveia de pote (overnight oats)', time:'5 min + geladeira', ut:[],
+   ing:[{fid:'aveia',q:50},{fid:'iogurte',q:1},{fid:'banana',q:1}], extra:'mel/canela (opcional)',
+   steps:'Misture aveia e iogurte num pote, cubra e deixe na geladeira de um dia pro outro. Sirva com banana em rodelas por cima.'},
+  {id:'mingau', name:'Mingau de aveia com banana', time:'10 min', ut:['panela'],
+   ing:[{fid:'aveia',q:50},{fid:'leitepo',q:30},{fid:'banana',q:1}], extra:'água, canela',
+   steps:'Dissolva o leite em pó em ~250 ml de água, junte a aveia e cozinhe mexendo até engrossar. Finalize com banana em rodelas.'},
+  {id:'grelhado', name:'Frango grelhado + arroz e legumes', time:'35 min', ut:['panela','frigideira'],
+   ing:[{fid:'frango',q:130},{fid:'arroz',q:150},{fid:'vegetais',q:150},{fid:'azeite',q:5}], extra:'sal, alho',
+   steps:'Cozinhe o arroz. Tempere o filé e grelhe na frigideira bem quente ~4 min por lado. Refogue ou cozinhe os legumes no vapor e finalize com azeite.'},
+  {id:'acebolado', name:'Fígado acebolado', time:'20 min', ut:['frigideira'],
+   ing:[{fid:'figado',q:130},{fid:'azeite',q:5}], extra:'cebola, sal, limão',
+   steps:'Tempere o fígado com sal e limão. Doure a cebola no azeite, suba o fogo e sele o fígado ~2 min por lado — cozinhar demais deixa duro.'},
+  {id:'strogo', name:'Strogonoff leve de frango', time:'30 min', ut:['panela','frigideira'],
+   ing:[{fid:'frango',q:130},{fid:'iogurte',q:1},{fid:'arroz',q:150}], extra:'tomate, cebola, sal',
+   steps:'Doure o frango em cubos, junte cebola e tomate picados e cozinhe até desmanchar. Desligue o fogo e misture o iogurte (não ferver!). Sirva com arroz.'},
+  {id:'arrozforno', name:'Arroz de forno com frango', time:'40 min', ut:['forno'],
+   ing:[{fid:'arroz',q:150},{fid:'frango',q:100},{fid:'vegetais',q:100},{fid:'ovo',q:1}], extra:'sal, temperos',
+   steps:'Misture arroz cozido, frango desfiado, legumes e o ovo batido numa assadeira. Asse a 200 °C por ~20 min até firmar e dourar.'},
+  {id:'omelete', name:'Omelete de legumes', time:'10 min', ut:['frigideira'],
+   ing:[{fid:'ovo',q:2},{fid:'vegetais',q:80},{fid:'azeite',q:5}], extra:'sal',
+   steps:'Bata os ovos com sal, misture os legumes picados bem miúdos e despeje na frigideira com azeite em fogo baixo. Vire quando firmar.'},
+  {id:'rabanada', name:'Rabanada de frigideira (pão + ovo)', time:'10 min', ut:['frigideira'],
+   ing:[{fid:'pao',q:2},{fid:'ovo',q:1},{fid:'leitepo',q:15}], extra:'canela',
+   steps:'Dissolva o leite em pó em um pouco de água, passe as fatias no leite e depois no ovo batido. Doure na frigideira e polvilhe canela.'},
+  {id:'vitamina', name:'Vitamina de banana com aveia', time:'5 min', ut:['liqui'],
+   ing:[{fid:'banana',q:1},{fid:'leitepo',q:30},{fid:'aveia',q:30}], extra:'água gelada',
+   steps:'Bata tudo no liquidificador com ~300 ml de água gelada até ficar cremoso.'},
+  {id:'airfrango', name:'Frango crocante na airfryer', time:'25 min', ut:['airfryer'],
+   ing:[{fid:'frango',q:130},{fid:'aveia',q:20},{fid:'ovo',q:1}], extra:'sal, páprica',
+   steps:'Passe as tiras de frango no ovo batido e empane na aveia temperada. Airfryer a 200 °C por 12–15 min, virando na metade.'},
+  {id:'chipsmaca', name:'Chips de maçã', time:'20 min', ut:['airfryer'],
+   ing:[{fid:'maca',q:1}], extra:'canela',
+   steps:'Fatie a maçã bem fina, polvilhe canela e leve à airfryer a 160 °C por ~15 min, mexendo no meio, até secar e ficar crocante.'},
+  {id:'bolinho', name:'Bolinho de aveia com maçã', time:'30 min', ut:['forno'],
+   ing:[{fid:'aveia',q:60},{fid:'ovo',q:1},{fid:'maca',q:1},{fid:'banana',q:1}], extra:'canela, fermento',
+   steps:'Amasse a banana, misture o ovo, a aveia, a maçã picada e uma pitada de fermento. Asse em forminhas a 180 °C por ~20 min.'},
+  {id:'iogfrutas', name:'Bowl de iogurte com frutas', time:'5 min', ut:[],
+   ing:[{fid:'iogurte',q:1},{fid:'banana',q:1},{fid:'maca',q:1},{fid:'aveia',q:20}], extra:'',
+   steps:'Monte o pote: iogurte no fundo, frutas picadas e aveia por cima. Pronto.'},
+  {id:'arrozmexido', name:'Arroz mexido com ovo e legumes', time:'15 min', ut:['frigideira'],
+   ing:[{fid:'arroz',q:150},{fid:'ovo',q:2},{fid:'vegetais',q:100},{fid:'azeite',q:5}], extra:'alho, sal',
+   steps:'Aqueça o azeite, frite o alho, junte os legumes e depois o arroz já cozido. Abra espaço, mexa os ovos ali mesmo e misture tudo.'},
+  {id:'patefigado', name:'Patê de fígado', time:'25 min', ut:['frigideira','liqui'],
+   ing:[{fid:'figado',q:100},{fid:'azeite',q:10}], extra:'cebola, sal',
+   steps:'Refogue o fígado com cebola até cozinhar por completo. Bata no liquidificador com azeite até virar pasta. Ótimo no pão — e uma forma de comer fígado sem sentir o gosto forte.'},
+];
 /* linhas base da dieta — espelham a planilha; times é função da config */
 const BASE_ROWS = [
   {key:'cafe_ovo',      meal:'Café da manhã', foodId:'ovo',      qty:1,   times:c=>c.cafeFreq,   timesLabel:c=>c.cafeFreq+'×/sem'},
@@ -692,7 +797,11 @@ let state = {
   goals:{weightKg:0, protPerKg:1.6, kcalGoal:0},
   days:{cafe:[0,1,2,3,4,5,6], almoco:[4,5,6], janta:[0,1,2,3,4,5,6], lanche:[0,1,2,3,4,5,6]},
   mealLog:{},        /* {weekKey:{'day_meal':true}} refeições marcadas como consumidas */
+  adhoc:{},          /* {weekKey:[{id,day,fid|null,label,qty,kcal,prot}]} fora do plano */
+  pantry:null,       /* {foodId:true} ingredientes disponíveis (null = todos) */
+  utensils:{panela:true, frigideira:true, micro:true},
   weights:[],        /* [{d:'2026-08-16', kg:70}] */
+  couple:{myName:'', shareKey:'', partnerKey:''},   /* acompanhamento a dois */
   foodOv:{},         /* {foodId:{code,label,buyUnit,factor,kcal,prot,varId}} — produto em uso */
   variants:{},       /* {foodId:[{id,code,label,qty,qtyLabel,price,storeId,d,kcal100,prot100}]} */
   qtyOv:{},          /* {rowKey: qty} — quantidade por vez editada */
@@ -754,7 +863,11 @@ function migrate(s){
       };
     })(),
     mealLog:s.mealLog||{},
+    adhoc:s.adhoc||{},
+    pantry:s.pantry||null,
+    utensils:s.utensils||{panela:true, frigideira:true, micro:true},
     weights:Array.isArray(s.weights)?s.weights:[],
+    couple:{myName:'', shareKey:'', partnerKey:'', ...(s.couple||{})},
     foodOv:s.foodOv||{},
     variants:s.variants||{},
     qtyOv:s.qtyOv||{}, offRows:s.offRows||{},
@@ -841,6 +954,10 @@ function renderConfig(){
   $('g_weight').value = state.goals.weightKg||'';
   $('g_ppk').value = state.goals.protPerKg||'';
   $('g_kcal').value = state.goals.kcalGoal||'';
+  ['c_myName','c_shareKey','c_partnerKey'].forEach((id,i)=>{
+    const el=$(id), v=[state.couple.myName,state.couple.shareKey,state.couple.partnerKey][i];
+    if(el&&document.activeElement!==el) el.value=v||'';
+  });
   const ws=state.weights;
   $('weightSub').textContent = ws.length
     ? 'última: '+ws[ws.length-1].kg.toFixed(1)+' kg em '+fmtDate(ws[ws.length-1].d)+' · '+ws.length+' registros'
@@ -1471,6 +1588,15 @@ function renderWeekPlan(){
         </div>
       </div>`;
     });
+    const wkAdhoc=(state.adhoc[wk]||[]).filter(a=>a.day===day);
+    wkAdhoc.forEach(a=>{
+      html+=`<div class="adhoc-row">
+        <span class="adot">➕</span>
+        <span class="atxt">${esc(trunc(a.label,34))}${a.fid||a.items?'':' · '+(a.kcal||0)+' kcal'}</span>
+        <button class="iconbtn" style="width:24px;height:24px;font-size:11px;" onclick="delAdhoc('${wk}','${a.id}')">✕</button>
+      </div>`;
+    });
+    html+=`<div style="padding:4px 0 2px;"><button class="btn plain compact" style="font-size:12px;" onclick="openAdhoc(${day})">＋ fora do plano</button></div>`;
     html+='</div>';
   });
   el.innerHTML=html;
@@ -1488,6 +1614,7 @@ function renderNutriBalance(){
       if(log[day+'_'+m.meal]){ real=sumNut(real,n); anyLogged=true; }
     });
   });
+  (state.adhoc[wk]||[]).forEach(a=>{ real=sumNut(real, adhocNutrients(a)); anyLogged=true; });
   /* extras entram no esperado */
   state.extraRows.forEach(r=>{
     const n=mealNutrients([{fid:r.foodId, qty:r.qty}]);
@@ -1512,9 +1639,13 @@ function renderNutriBalance(){
     const pct=v=>Math.min(100, v/top*100);
     let flag='', cls='';
     if(e < n.min*0.8){ flag='abaixo da faixa ('+fmtN(n.min,n.unit)+'+)'; cls='low'; }
-    else if(n.max && e>n.max){ flag='acima do limite ('+fmtN(n.max,n.unit)+')'; cls='high'; }
+    else if(n.max && e>n.max){
+      const src=nutrientSources(n.key).list;
+      flag='acima do limite ('+fmtN(n.max,n.unit)+')'+(src.length?' — maior fonte: '+src[0].name:'');
+      cls='high';
+    }
     else { flag='dentro da faixa'; cls='ok'; }
-    html+=`<div class="nutbar">
+    html+=`<div class="nutbar" style="cursor:pointer;" onclick="openNutrientDetail('${n.key}')">
       <div class="ntop">
         <span class="nname">${n.label}</span>
         <span class="nvals">${fmtN(e,n.unit)}${anyLogged?' · real '+fmtN(r,n.unit):''}</span>
@@ -1588,6 +1719,341 @@ function addWeight(){
 function delWeight(d){
   state.weights=state.weights.filter(w=>w.d!==d);
   render(); save(); openWeights();
+}
+
+/* ==================== RECEITAS / DESPENSA ==================== */
+function pantryHas(fid){
+  return state.pantry===null ? true : !!state.pantry[fid];
+}
+function togglePantry(fid){
+  if(state.pantry===null){
+    state.pantry={};
+    allFoods().forEach(f=>state.pantry[f.id]=true);
+  }
+  state.pantry[fid]=!state.pantry[fid];
+  render(); save();
+}
+function toggleUtensil(id){
+  state.utensils[id]=!state.utensils[id];
+  render(); save();
+}
+function recipeStatus(r){
+  const missIng=r.ing.filter(i=>!pantryHas(i.fid)).map(i=>food(i.fid)?food(i.fid).name:i.fid);
+  const missUt=r.ut.filter(u=>!state.utensils[u]).map(u=>(UTENSILS.find(x=>x.id===u)||{name:u}).name);
+  return {miss:[...missIng,...missUt], ok:missIng.length+missUt.length===0};
+}
+function renderRecipes(){
+  const pc=$('pantryChips'), uc=$('utensilChips'), list=$('recipesList');
+  if(!pc) return;
+  pc.innerHTML=allFoods().map(f=>
+    `<button class="ingchip ${pantryHas(f.id)?'on':''}" onclick="togglePantry('${f.id}')">${esc(trunc(f.name,18))}</button>`).join('');
+  uc.innerHTML=UTENSILS.map(u=>
+    `<button class="ingchip ${state.utensils[u.id]?'on':''}" onclick="toggleUtensil('${u.id}')">${esc(u.name)}</button>`).join('');
+  const scored=RECIPES.map(r=>({r, st:recipeStatus(r)}));
+  scored.sort((a,b)=>a.st.miss.length-b.st.miss.length);
+  let html='';
+  scored.forEach(({r,st})=>{
+    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
+    let badge;
+    if(st.ok) badge='<span class="pill green">dá pra fazer</span>';
+    else if(st.miss.length===1) badge='<span class="pill amber">falta: '+esc(trunc(st.miss[0],16))+'</span>';
+    else badge='<span class="pill" style="background:var(--fill); color:var(--ink3);">faltam '+st.miss.length+'</span>';
+    html+=`
+      <div class="row recipe-row ${st.ok?'':'locked'}" onclick="openRecipe('${r.id}')">
+        <div class="grow">
+          <div class="rtitle">${esc(r.name)} ${badge}</div>
+          <div class="rsub">${r.time} · ${n.kcal.toFixed(0)} kcal · ${n.prot.toFixed(0)} g proteína</div>
+        </div>
+        <span class="chev">›</span>
+      </div>`;
+  });
+  list.innerHTML=html;
+}
+function openRecipe(id){
+  const r=RECIPES.find(x=>x.id===id); if(!r) return;
+  const st=recipeStatus(r);
+  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
+  const ings=r.ing.map(i=>{
+    const f=food(i.fid);
+    const have=pantryHas(i.fid);
+    const q=f&&f.unit==='g'? i.q+' g' : i.q+'×';
+    return `<div class="histrow"><span style="${have?'':'color:var(--orange);'}">${have?'✓':'✗'} ${esc(f?f.name:i.fid)}</span><span>${q}</span></div>`;
+  }).join('');
+  const uts=r.ut.length? r.ut.map(u=>(UTENSILS.find(x=>x.id===u)||{name:u}).name).join(', ') : 'nenhum (só montar)';
+  openSheet(`
+    <h3>${esc(r.name)}</h3>
+    <p class="ssub">${r.time} · ${uts}${st.ok?'':' · <b style="color:var(--orange)">falta: '+esc(st.miss.join(', '))+'</b>'}</p>
+    <div class="statgrid" style="padding:0 0 8px;">
+      <div class="tile"><div class="tl">Calorias</div><div class="tv">${n.kcal.toFixed(0)}<small> kcal</small></div><div class="ts">por porção</div></div>
+      <div class="tile hero"><div class="tl">Proteína</div><div class="tv">${n.prot.toFixed(0)}<small> g</small></div><div class="ts">por porção</div></div>
+    </div>
+    ${ings}
+    ${r.extra?'<div class="cardnote" style="padding:8px 0 0;">Extras de tempero: '+esc(r.extra)+'</div>':''}
+    <div style="font-size:14px; line-height:1.65; margin-top:12px;">${esc(r.steps)}</div>
+    <button class="btn soft block" style="margin-top:14px;" onclick="logRecipe('${r.id}')">✓ Comi isso hoje (registrar fora do plano)</button>
+  `);
+}
+function logRecipe(id){
+  const r=RECIPES.find(x=>x.id===id); if(!r) return;
+  const wk=weekKey();
+  if(!state.adhoc[wk]) state.adhoc[wk]=[];
+  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
+  state.adhoc[wk].push({id:'a_'+Date.now(), day:todayIdx(), fid:null, label:r.name, qty:1,
+    kcal:+n.kcal.toFixed(0), prot:+n.prot.toFixed(1), items:r.ing.map(i=>({fid:i.fid, qty:i.q}))});
+  closeSheet(); render(); save();
+  toast('Registrado no dia de hoje ✓');
+}
+
+/* ==================== FORA DO PLANO ==================== */
+function openAdhoc(day){
+  const opts=allFoods().map(f=>`<option value="${f.id}">${esc(f.name)} (${f.unit})</option>`).join('');
+  window._adhocDay=day;
+  openSheet(`
+    <h3>Fora do plano — ${DAY_NAMES[day]}</h3>
+    <p class="ssub">Comeu algo diferente do cardápio? Registre aqui que entra no consumo real. Se substituiu uma refeição, desmarque a caixinha dela no cardápio.</p>
+    <div class="formgrid">
+      <label>O que você comeu</label>
+      <select class="field" id="ah_food">${opts}<option value="__free__">outra comida (digitar)…</option></select>
+      <div id="ah_qtybox">
+        <label>Quantidade (na unidade do alimento)</label>
+        <input class="field" id="ah_qty" type="number" min="0" value="100">
+      </div>
+      <div id="ah_freebox" style="display:none;">
+        <div class="formgrid">
+          <label>Nome (ex: pizza, marmita do RU, coxinha)</label>
+          <input class="field" id="ah_label" placeholder="ex: pizza 2 fatias">
+          <div class="f2">
+            <div><label>Calorias (aprox.)</label><input class="field" id="ah_kcal" type="number" min="0" placeholder="ex: 550"></div>
+            <div><label>Proteína g (aprox.)</label><input class="field" id="ah_prot" type="number" min="0" placeholder="ex: 20"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="btn tint block" onclick="saveAdhoc()">Registrar</button>
+  `);
+  $('ah_food').addEventListener('change', e=>{
+    const free=e.target.value==='__free__';
+    $('ah_freebox').style.display=free?'block':'none';
+    $('ah_qtybox').style.display=free?'none':'block';
+  });
+}
+function saveAdhoc(){
+  const day=window._adhocDay;
+  const wk=weekKey();
+  if(!state.adhoc[wk]) state.adhoc[wk]=[];
+  const sel=$('ah_food').value;
+  let entry;
+  if(sel==='__free__'){
+    const label=$('ah_label').value.trim();
+    if(!label){ toast('Dê um nome à comida'); return; }
+    entry={id:'a_'+Date.now(), day, fid:null, label,
+      kcal:parseFloat($('ah_kcal').value)||0, prot:parseFloat($('ah_prot').value)||0};
+  }else{
+    const f=food(sel);
+    const qty=parseFloat($('ah_qty').value)||0;
+    if(qty<=0){ toast('Informe a quantidade'); return; }
+    entry={id:'a_'+Date.now(), day, fid:sel, qty,
+      label:(f.unit==='g'?qty+'g ':qty+'× ')+f.name};
+  }
+  state.adhoc[wk].push(entry);
+  /* limpa semanas antigas */
+  const keys=Object.keys(state.adhoc).sort();
+  while(keys.length>10){ delete state.adhoc[keys.shift()]; }
+  closeSheet(); render(); save();
+  toast('Registrado ✓');
+}
+function delAdhoc(wk, id){
+  state.adhoc[wk]=(state.adhoc[wk]||[]).filter(a=>a.id!==id);
+  render(); save();
+}
+function adhocNutrients(a){
+  if(a.items){ const n=mealNutrients(a.items); return n; }
+  if(a.fid){ return mealNutrients([{fid:a.fid, qty:a.qty}]); }
+  const t=zeroNut(); t.kcal=a.kcal||0; t.prot=a.prot||0; return t;
+}
+
+/* ==================== FONTES DE NUTRIENTE ==================== */
+function nutrientSources(nkey){
+  const weekly=computeWeekly();
+  const list=[];
+  let total=0;
+  Object.keys(weekly).forEach(fid=>{
+    const f=food(fid); if(!f||!f.micro) return;
+    const v=(f.micro[nkey]||0)*weekly[fid];
+    if(v>0){ list.push({name:f.name, v}); total+=v; }
+  });
+  list.sort((a,b)=>b.v-a.v);
+  return {list, total};
+}
+function openNutrientDetail(nkey){
+  const n=NUTRIENTS.find(x=>x.key===nkey); if(!n) return;
+  const {list, total}=nutrientSources(nkey);
+  const perDay=total/7;
+  let bars='';
+  list.forEach(s=>{
+    const pct=total>0? s.v/total*100 : 0;
+    bars+=`<div class="srcbar">
+      <span class="sname">${esc(trunc(s.name,14))}</span>
+      <div class="strack"><div style="width:${pct.toFixed(1)}%"></div></div>
+      <span class="spct">${pct.toFixed(0)}% · ${(s.v/7).toFixed(s.v/7<10?1:0)}</span>
+    </div>`;
+  });
+  let advice='';
+  if(perDay>n.min*0.0){ /* sempre mostra faixa */ }
+  if(n.max && perDay>n.max && list.length){
+    advice=`<div class="cardnote" style="color:var(--red); padding:10px 0 0;">⚠️ Acima do limite de ${n.max} ${n.unit}/dia. Maior fonte: <b>${esc(list[0].name)}</b> — reduzir a quantidade ou a frequência dele resolve a maior parte.</div>`;
+  }else if(perDay<n.min*0.8){
+    advice=`<div class="cardnote" style="color:var(--orange); padding:10px 0 0;">Abaixo da faixa (${n.min} ${n.unit}/dia). As fontes acima são as que você já tem — aumentar a maior delas ou adicionar um alimento rico em ${esc(n.label.toLowerCase())} ajuda.</div>`;
+  }
+  openSheet(`
+    <h3>${esc(n.label)}</h3>
+    <p class="ssub">Esperado: ${(perDay).toFixed(perDay<10?1:0)} ${n.unit}/dia · faixa: ${n.min}${n.max?'–'+n.max:'+'} ${n.unit} · de onde vem:</p>
+    ${bars||'<div class="empty">Nenhuma fonte no plano atual.</div>'}
+    ${advice}
+  `);
+}
+
+/* ==================== ACOMPANHAMENTO A DOIS ==================== */
+function genShareKey(){
+  const chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let k='ac'; const arr=new Uint32Array(22); crypto.getRandomValues(arr);
+  for(let i=0;i<22;i++) k+=chars[arr[i]%chars.length];
+  $('c_shareKey').value=k;
+}
+function saveCouple(){
+  state.couple.myName=$('c_myName').value.trim();
+  state.couple.shareKey=$('c_shareKey').value.trim();
+  state.couple.partnerKey=$('c_partnerKey').value.trim();
+  render(); save();
+  pushSummary();
+  fetchPartner(true);
+  toast('Acompanhamento salvo ✓');
+}
+function relTime(ts){
+  if(!ts) return '';
+  const m=Math.round((Date.now()-ts)/60000);
+  if(m<2) return 'agora há pouco';
+  if(m<60) return 'há '+m+' min';
+  const h=Math.round(m/60);
+  if(h<48) return 'há '+h+' h';
+  return 'há '+Math.round(h/24)+' dias';
+}
+function buildSummary(){
+  const plan=weekPlanData();
+  const wk=weekKey(), log=state.mealLog[wk]||{};
+  let done=0, total=0, exp=zeroNut(), real=zeroNut();
+  plan.forEach((meals,day)=>{
+    meals.forEach(m=>{
+      if(m.out) return;
+      total++;
+      const n=mealNutrients(m.items);
+      exp=sumNut(exp,n);
+      if(log[day+'_'+m.meal]){ done++; real=sumNut(real,n); }
+    });
+  });
+  (state.adhoc[wk]||[]).forEach(a=>{ real=sumNut(real, adhocNutrients(a)); });
+  const daysElapsed=Math.min(7, todayIdx()+1);
+  const ws=state.weights;
+  const last=ws.length?ws[ws.length-1]:null;
+  let d7=null;
+  if(last){
+    const lim=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const older=ws.filter(w=>w.d<=lim);
+    if(older.length) d7=+(last.kg-older[older.length-1].kg).toFixed(1);
+  }
+  const weekly=computeWeekly();
+  let costMo=0, priced=0;
+  allFoods().forEach(f=>{
+    const q=monthlyBuyQty(f.id,weekly); if(q<=0) return;
+    const bp=bestPrice(f.id);
+    if(bp){ costMo+=bp.price*q; priced++; }
+  });
+  return {
+    isSummary:true,
+    name:state.couple.myName||'Par',
+    updatedAt:Date.now(),
+    kg:last?last.kg:null, kgD7:d7,
+    pesoData:ws.slice(-14),
+    mealsDone:done, mealsTotal:total,
+    protReal:+(real.prot/daysElapsed).toFixed(0),
+    protExp:+(exp.prot/7).toFixed(0),
+    protGoal:state.goals.weightKg>0? +(state.goals.weightKg*state.goals.protPerKg).toFixed(0):null,
+    kcalReal:+(real.kcal/daysElapsed).toFixed(0),
+    custoMes:priced>0? +costMo.toFixed(2):null
+  };
+}
+let summaryTimer=null;
+function scheduleSummary(){
+  if(!sync.dbUrl||!state.couple.shareKey) return;
+  clearTimeout(summaryTimer);
+  summaryTimer=setTimeout(pushSummary, 2500);
+}
+async function pushSummary(){
+  if(!sync.dbUrl||!state.couple.shareKey) return;
+  try{
+    await fetch(sync.dbUrl.replace(/\/+$/,'')+'/listas/'+encodeURIComponent(state.couple.shareKey)+'.json',
+      {method:'PUT', body:JSON.stringify(buildSummary()), headers:{'Content-Type':'application/json'}});
+  }catch(e){}
+}
+let partnerData=null;
+async function fetchPartner(manual){
+  if(!sync.dbUrl||!state.couple.partnerKey){ if(manual) toast('Cole a chave do par primeiro'); return; }
+  try{
+    const res=await fetch(sync.dbUrl.replace(/\/+$/,'')+'/listas/'+encodeURIComponent(state.couple.partnerKey)+'.json',{cache:'no-store'});
+    if(!res.ok) throw 0;
+    const b=await res.json();
+    if(b&&b.isSummary) partnerData=b;
+    else if(b&&b.config){
+      /* o par colou a chave de sincronização completa — extrai o básico */
+      const ws=Array.isArray(b.weights)?b.weights:[];
+      const last=ws.length?ws[ws.length-1]:null;
+      partnerData={isSummary:true, name:(b.couple&&b.couple.myName)||'Par', updatedAt:b.updatedAt,
+        kg:last?last.kg:null, kgD7:null, pesoData:ws.slice(-14),
+        mealsDone:Object.keys((b.mealLog||{})[weekKey()]||{}).length, mealsTotal:null,
+        protReal:null, protExp:null,
+        protGoal:b.goals&&b.goals.weightKg? +(b.goals.weightKg*b.goals.protPerKg).toFixed(0):null,
+        kcalReal:null, custoMes:null};
+    }
+    else partnerData=null;
+    renderPartner();
+    if(manual&&partnerData) toast('Painel de '+partnerData.name+' atualizado ✓');
+    if(manual&&!partnerData) toast('Nada encontrado nessa chave ainda');
+  }catch(e){
+    if(manual) toast('Não consegui buscar o painel do par');
+  }
+}
+function renderPartner(){
+  const el=$('partnerCard'); if(!el) return;
+  if(!state.couple.partnerKey){ el.innerHTML=''; return; }
+  const p=partnerData;
+  if(!p){
+    el.innerHTML='<div class="lcard"><div class="cardtitle">❤️ Acompanhamento</div><div class="empty">Aguardando o primeiro resumo do par…<br>Ele(a) precisa salvar a própria chave de acompanhamento no app.</div></div>';
+    return;
+  }
+  const spark = p.pesoData&&p.pesoData.length>1 ? (function(){
+    const pts=p.pesoData.slice(-14), kgs=pts.map(w=>w.kg);
+    const mn=Math.min(...kgs), mx=Math.max(...kgs), range=(mx-mn)||1;
+    const W=120,H=34;
+    const c=pts.map((w,i)=>((6+(W-12)*i/(pts.length-1)).toFixed(1))+','+((H-6-(H-12)*(w.kg-mn)/range).toFixed(1)));
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${c.join(' ')}" fill="none" stroke="var(--spark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  })() : '';
+  el.innerHTML=`
+    <div class="lcard">
+      <div class="cardtitle" style="display:flex; justify-content:space-between;">
+        <span>❤️ ${esc(p.name)}</span>
+        <span style="text-transform:none; letter-spacing:0; font-weight:600;">${relTime(p.updatedAt)}</span>
+      </div>
+      <div class="statgrid" style="padding:6px 14px 14px;">
+        <div class="tile hero"><div class="tl">Peso</div><div class="tv">${p.kg!=null?p.kg.toFixed(1):'—'}<small> kg</small></div>
+          <div class="ts">${p.kgD7!=null?(p.kgD7>=0?'+':'')+p.kgD7+' kg em 7 dias':''}</div>${spark}</div>
+        <div class="tile"><div class="tl">Refeições da semana</div><div class="tv">${p.mealsDone!=null?p.mealsDone:'—'}${p.mealsTotal?'<small> /'+p.mealsTotal+'</small>':''}</div>
+          ${p.mealsTotal?'<div class="goalbar"><div style="width:'+Math.min(100,p.mealsDone/p.mealsTotal*100)+'%"></div></div>':''}</div>
+        <div class="tile"><div class="tl">Proteína/dia real</div><div class="tv">${p.protReal!=null?p.protReal:'—'}<small> g</small></div>
+          <div class="ts">${p.protGoal?'meta: '+p.protGoal+' g':''}</div></div>
+        <div class="tile"><div class="tl">Custo/mês</div><div class="tv">${p.custoMes!=null?fmtMoney(p.custoMes):'—'}</div><div class="ts">da dieta dele(a)</div></div>
+      </div>
+      <div style="padding:0 20px 14px;"><button class="btn plain compact" onclick="fetchPartner(true)">atualizar agora</button></div>
+    </div>`;
 }
 
 /* ==================== FASE 1: NORMALIZADO / TROCA / SCANNER ==================== */
@@ -2105,6 +2571,7 @@ async function cloudPull(manual){
   }
 }
 function schedulePush(){
+  scheduleSummary();
   if(!syncUrl()) return;
   clearTimeout(pushTimer);
   pushTimer=setTimeout(cloudPush,1200);
@@ -2123,10 +2590,11 @@ async function cloudPush(){
 }
 function startPolling(){
   clearInterval(pollTimer);
-  pollTimer=setInterval(()=>cloudPull(),60000);
+  pollTimer=setInterval(()=>{ cloudPull(); fetchPartner(); },60000);
 }
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&syncUrl()) cloudPull();
+  if(document.visibilityState==='visible') fetchPartner();
 });
 
 /* ==================== BACKUP / RESET ==================== */
@@ -2164,9 +2632,11 @@ function render(){
   renderConfig();
   renderNutri();
   renderSwap();
+  renderPartner();
   renderDietRows();
   renderDayPickers();
   renderMealPrep();
+  renderRecipes();
   renderWeekPlan();
   renderNutriBalance();
   renderList();
@@ -2188,6 +2658,7 @@ goTab(ui.tab||'dieta');
   renderList();
 })();
 loadSyncSettings();
+fetchPartner();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }

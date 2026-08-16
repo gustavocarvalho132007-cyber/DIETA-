@@ -89,3 +89,24 @@ Escaneie o QR do cupom fiscal na saída do mercado e os preços da compra entram
 - 🧪 **Balanço de micronutrientes** (10 nutrientes, TACO/USDA) com faixas de referência (RDA/UL) e alertas. Estimativa educativa — não substitui nutricionista.
 - ⚖️ **Pesagem**: registre o peso, veja gráfico e variação de 7/30 dias; a meta de proteína se atualiza sozinha.
 - 📄 **Importar nota fiscal (NFC-e)** via QR do cupom + Cloudflare Worker.
+
+## Novidades da Fase 3
+
+- 👨‍🍳 **Receitas com o que você tem**: 16 receitas montadas só com os itens da dieta. Marque os ingredientes que tem em casa e seus utensílios (panela, frigideira, forno, airfryer, micro-ondas, liquidificador) — o app mostra o que "dá pra fazer" agora, o que "falta 1", o preparo e a nutrição por porção. Dá pra registrar "comi isso hoje" direto da receita.
+- ➕ **Fora do plano**: em cada dia do cardápio, registre o que comeu além (ou no lugar) do planejado — um alimento do app com quantidade, ou comida livre com nome + calorias + proteína (ex: "pizza 2 fatias · 550 kcal"). Tudo entra no consumo real do balanço. Se substituiu uma refeição, desmarque a caixinha dela.
+- 🔍 **Fontes de cada nutriente**: toque em qualquer nutriente do balanço para ver de onde ele vem, alimento por alimento, com percentuais. Quando algo passa do limite, o alerta já aponta o maior responsável (ex: "Vitamina A acima do limite — maior fonte: Fígado, 83%").
+
+## Acompanhamento a dois ❤️
+
+Para usar em casal (mesmo em cidades diferentes): **cada um tem seus próprios dados** — dieta, mercados da sua cidade, preços, metas, tudo separado, cada um com sua chave de sincronização. O que se compartilha é só um painel de métricas.
+
+Como configurar (os dois usam o MESMO link do app e o MESMO banco Firebase):
+
+1. Cada um em **Ajustes → Sincronização**: gera **sua própria** chave de sincronização e conecta (a URL do banco é a mesma pros dois).
+2. Cada um em **Ajustes → Acompanhamento a dois**: coloca o apelido, **gera a chave de acompanhamento** e salva.
+3. Troquem as chaves **de acompanhamento** (não a de sincronização!) por mensagem.
+4. Cada um cola a chave recebida em "chave do par" e salva.
+
+Pronto: na aba Dieta aparece o painel do outro — peso e variação em 7 dias (com mini-gráfico), refeições da semana marcadas, proteína real vs meta e custo/mês da dieta. Atualiza sozinho a cada minuto, ao voltar pro app, ou no botão "atualizar agora".
+
+**Privacidade:** a chave de acompanhamento só dá acesso a esse resumo — quem a tem não vê nem edita seus dados. A chave de sincronização continua sendo a "senha" dos seus dados: essa não se compartilha.
