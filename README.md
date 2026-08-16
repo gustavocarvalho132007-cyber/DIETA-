@@ -1,4 +1,4 @@
-# 🧺 Planejador de compras — versão iOS
+# 🍽️ Dieta — app de dieta e compras (versão iOS)
 
 App web estilo iOS (Liquid Glass) que calcula sua lista de compras a partir da dieta, compara preços entre mercados e sincroniza tudo na nuvem (celular + computador). Modo claro e escuro automáticos.
 
@@ -9,7 +9,7 @@ App web estilo iOS (Liquid Glass) que calcula sua lista de compras a partir da d
 | `index.html` | O app inteiro (funciona sozinho, até aberto direto no navegador) |
 | `manifest.json` | Deixa o app instalável na tela inicial do celular |
 | `sw.js` | Faz o app abrir offline depois da primeira visita |
-| `icon-192.png` / `icon-512.png` | Ícones do app (squircle iOS) |
+| `icon-192.png` / `icon-512.png` | Ícones do app (prato com talheres, squircle iOS) |
 
 ## Abas do app
 
@@ -21,10 +21,10 @@ App web estilo iOS (Liquid Glass) que calcula sua lista de compras a partir da d
 ## Passo 1 — Publicar de graça (GitHub Pages, ~5 min)
 
 1. Crie uma conta em [github.com](https://github.com).
-2. **New repository** → nome (ex: `planejador`) → **Public** → criar.
+2. **New repository** → nome (ex: `dieta`) → **Public** → criar.
 3. Na página do repositório: **uploading an existing file** → arraste os 5 arquivos desta pasta → **Commit changes**.
 4. **Settings → Pages** → Branch `main`, pasta `/ (root)` → salvar.
-5. Em 1–2 min o app estará em `https://SEU-USUARIO.github.io/planejador/`.
+5. Em 1–2 min o app estará em `https://SEU-USUARIO.github.io/dieta/`.
 
 No celular (Chrome/Safari): **Compartilhar / menu ⋮ → Adicionar à tela inicial** para instalar como app.
 

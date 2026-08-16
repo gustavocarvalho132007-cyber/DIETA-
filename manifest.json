@@ -1,6 +1,6 @@
 {
-  "name": "Planejador de compras",
-  "short_name": "Planejador",
+  "name": "Dieta",
+  "short_name": "Dieta",
   "description": "Dieta barata e nutritiva + comparador de preços de mercado",
   "start_url": ".",
   "display": "standalone",

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Planejador</title>
+<title>Dieta</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -467,7 +467,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
         <div class="grow"><div class="rtitle" style="color:var(--red);">Apagar tudo e recomeçar</div></div>
       </div>
     </div>
-    <div class="empty" style="padding-top:6px;">Planejador de compras · feito para a sua dieta<br>v3 · iOS-style</div>
+    <div class="empty" style="padding-top:6px;">Dieta · planeje, compare e economize<br>v3 · iOS-style</div>
   </section>
 </main>
 
@@ -1084,7 +1084,8 @@ function applyTheme(){
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 /* ==================== SYNC (Firebase REST) ==================== */
-let sync={dbUrl:'',syncKey:''};
+const DEFAULT_DB_URL='https://banco-de-dados-dieta-default-rtdb.firebaseio.com';
+let sync={dbUrl:DEFAULT_DB_URL,syncKey:''};
 let pushTimer=null, pollTimer=null, pushing=false;
 function syncUrl(){
   if(!sync.dbUrl||!sync.syncKey) return null;
@@ -1098,6 +1099,7 @@ function setSyncStatus(msg, cls){
 }
 function loadSyncSettings(){
   try{ const raw=localStorage.getItem(LS_SYNC); if(raw) sync={...sync,...JSON.parse(raw)}; }catch(e){}
+  if(!sync.dbUrl) sync.dbUrl=DEFAULT_DB_URL;
   $('dbUrl').value=sync.dbUrl||'';
   $('syncKey').value=sync.syncKey||'';
   if(syncUrl()){ setSyncStatus('conectando…'); startPolling(); cloudPull(); }
@@ -1171,7 +1173,7 @@ function exportBackup(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='planejador-backup-'+todayISO()+'.json';
+  a.download='dieta-backup-'+todayISO()+'.json';
   a.click();
   toast('Backup baixado');
 }
