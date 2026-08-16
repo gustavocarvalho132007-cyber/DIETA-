@@ -1,5 +1,5 @@
 /* Service worker: deixa o app abrir offline depois da primeira visita */
-const CACHE = 'planejador-v1';
+const CACHE = 'dieta-v2';
 const ASSETS = ['.', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   /* nunca cachear as chamadas do Firebase */
-  if (url.hostname.includes('firebaseio.com') || url.hostname.includes('firebasedatabase.app')) return;
+  if (url.hostname.includes('firebaseio.com') || url.hostname.includes('firebasedatabase.app')
+      || url.hostname.includes('openfoodfacts.org')) return;
   if (e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then(cached => {
