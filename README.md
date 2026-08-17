@@ -120,3 +120,19 @@ Em **Ajustes → Pareamento rápido** há três opções:
 - **📷 Escanear um pareamento** — lê o QR mostrado em outro aparelho (ou cole o link recebido).
 
 Abrir um link de pareamento no navegador configura o app automaticamente, com tela de confirmação antes. Se um link vazar, basta gerar uma chave nova em Ajustes — o link antigo morre.
+
+## Micronutrientes de alimentos escaneados
+
+Ao cadastrar um alimento novo pelo código de barras, o app agora captura também os **micronutrientes do rótulo** (fibra, ferro, cálcio, magnésio, zinco, potássio, vitaminas A/C, B12 e folato) da Open Food Facts, quando disponíveis — e eles passam a contar no balanço nutricional e nas fontes por nutriente, igual aos alimentos padrão. kcal e proteína contam sempre, em qualquer registro; comida livre ("pizza 2 fatias") conta só kcal + proteína informadas.
+
+## Almoço fora de casa (faculdade/RU)
+
+Nos dias sem almoço em casa, o cardápio mostra "🍛 Almoço — bandejão do RU" (nome configurável) **com caixinha de ✓**: toque no nome para definir as calorias e a proteína típicas do prato de lá (referência: prato de RU fica entre 700–900 kcal e 30–40 g de proteína). Esses valores entram no esperado e, quando você marca ✓, no consumido real — então a proteína/dia e as calorias/dia do app passam a refletir o dia inteiro, não só a comida de casa. Micronutrientes do prato de fora não são contados (não dá pra saber). Comeu algo muito diferente num dia? Desmarque e registre em "fora do plano". Dá para desligar a contagem no mesmo lugar.
+
+## Biblioteca de pratos (RU / refeições fora)
+
+Você tem acesso ao cardápio do RU? Monte cada prato **pelos ingredientes** (com quantidades) uma única vez — os pratos se repetem, então a biblioteca cresce e depois é só selecionar. Pratos montados por ingredientes contam calorias, proteína **e micronutrientes** no balanço.
+
+- No almoço fora de casa (cardápio): toque na refeição → escolha o prato daquele dia na biblioteca (ou crie na hora). O dia passa a contar o prato real em vez da estimativa padrão.
+- No "fora do plano": os pratos salvos aparecem no topo da lista — um toque registra o prato completo.
+- Ingrediente que ainda não existe no app (feijão, farofa…)? Cadastre antes em Dieta → adicionar item (escaneando, os micros do rótulo vêm juntos).

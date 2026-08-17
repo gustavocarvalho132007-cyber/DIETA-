@@ -422,7 +422,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     <div class="lcard">
       <div class="cardtitle">Nutrição do plano</div>
       <div class="statgrid" id="nutriGrid"></div>
-      <div class="cardnote">Valores aproximados (TACO/USDA), só do que você come em casa — o almoço da faculdade não entra. Custo usa o menor preço entre seus mercados.</div>
+      <div class="cardnote">Valores aproximados (TACO/USDA). Calorias e proteína incluem o almoço fora de casa (configurável no Cardápio); o custo usa o menor preço entre seus mercados e cobre só a comida de casa.</div>
     </div>
 
     <div class="lcard">
@@ -496,7 +496,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     <div class="lcard">
       <div class="cardtitle">Balanço nutricional — esperado × consumido</div>
       <div id="nutriBalance" style="padding:4px 20px 8px;"></div>
-      <div class="cardnote">Média diária. <b>Esperado</b> = seu plano completo · <b>Real</b> = o que você marcou na semana ÷ dias já passados. Faixas de referência para adulto (RDA/UL, NIH-EFSA); valores dos alimentos aproximados (TACO/USDA). Estimativa educativa — não substitui avaliação de nutricionista. O almoço da faculdade não entra na conta.</div>
+      <div class="cardnote">Média diária. <b>Esperado</b> = seu plano completo · <b>Real</b> = o que você marcou na semana ÷ dias já passados. Faixas de referência para adulto (RDA/UL, NIH-EFSA); valores dos alimentos aproximados (TACO/USDA). Estimativa educativa — não substitui avaliação de nutricionista. O almoço fora de casa conta kcal e proteína (pelo valor que você configurou nele) — micronutrientes só dos alimentos conhecidos.</div>
     </div>
   </section>
 
@@ -814,6 +814,9 @@ let state = {
   goals:{weightKg:0, protPerKg:1.6, kcalGoal:0},
   days:{cafe:[0,1,2,3,4,5,6], almoco:[4,5,6], janta:[0,1,2,3,4,5,6], lanche:[0,1,2,3,4,5,6]},
   mealLog:{},        /* {weekKey:{'day_meal':true}} refeições marcadas como consumidas */
+  uniMeal:{enabled:true, label:'almoço na faculdade', kcal:800, prot:35},
+  dishes:[],         /* pratos salvos: [{id, name, items:[{fid,qty}]}] */
+  uniPick:{},        /* {weekKey:{day: dishId}} prato escolhido no almoço fora */
   adhoc:{},          /* {weekKey:[{id,day,fid|null,label,qty,kcal,prot}]} fora do plano */
   pantry:null,       /* {foodId:true} ingredientes disponíveis (null = todos) */
   utensils:{panela:true, frigideira:true, micro:true},
@@ -834,7 +837,10 @@ let ui = {tab:'dieta', listMode:'item', listScope:'mes', theme:'auto'};
 
 /* ==================== HELPERS ==================== */
 const $ = id => document.getElementById(id);
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+function todayISO(){
+  const d=new Date();
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
 function fmt(n){ return (Math.round(n*10)/10).toLocaleString('pt-BR'); }
 function fmtMoney(n){ return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function fmtDate(iso){ const [y,m,d]=iso.split('-'); return d+'/'+m; }
@@ -880,6 +886,9 @@ function migrate(s){
       };
     })(),
     mealLog:s.mealLog||{},
+    uniMeal:{enabled:true, label:'almoço na faculdade', kcal:800, prot:35, ...(s.uniMeal||{})},
+    dishes:Array.isArray(s.dishes)?s.dishes:[],
+    uniPick:s.uniPick||{},
     adhoc:s.adhoc||{},
     pantry:s.pantry||null,
     utensils:s.utensils||{panela:true, frigideira:true, micro:true},
@@ -1012,6 +1021,9 @@ function renderNutri(){
     const f=food(fid); if(!f) return;
     kcalW += weekly[fid]*f.kcal; protW += weekly[fid]*f.prot;
   });
+  const uniDays = state.uniMeal.enabled ? Math.max(0, 7-state.days.almoco.length) : 0;
+  kcalW += uniDays*(state.uniMeal.kcal||0);
+  protW += uniDays*(state.uniMeal.prot||0);
   let costMo=0, priced=0, total=0;
   allFoods().forEach(f=>{
     const q=monthlyBuyQty(f.id,weekly); if(q<=0) return;
@@ -1027,8 +1039,8 @@ function renderNutri(){
     ? `<div class="goalbar"><div style="width:${Math.min(100,cur/goal*100)}%"></div></div><div class="ts">${(cur/goal*100).toFixed(0)}% da meta (${goal.toFixed(0)} ${unit})</div>`
     : '<div class="ts">em casa</div>';
   $('nutriGrid').innerHTML = `
-    <div class="tile hero"><div class="tl">Proteína/dia</div><div class="tv">${(protW/7).toFixed(0)}<small> g</small></div>${bar(protW/7, protGoal, 'g')}</div>
-    <div class="tile"><div class="tl">Calorias/dia</div><div class="tv">${(kcalW/7).toFixed(0)}<small> kcal</small></div>${bar(kcalW/7, kcalGoal, 'kcal')}</div>
+    <div class="tile hero"><div class="tl">Proteína/dia</div><div class="tv">${(protW/7).toFixed(0)}<small> g</small></div>${protGoal>0?bar(protW/7, protGoal, 'g'):'<div class="ts">'+(uniDays>0?'inclui almoço fora':'em casa')+'</div>'}</div>
+    <div class="tile"><div class="tl">Calorias/dia</div><div class="tv">${(kcalW/7).toFixed(0)}<small> kcal</small></div>${kcalGoal>0?bar(kcalW/7, kcalGoal, 'kcal'):'<div class="ts">'+(uniDays>0?'inclui almoço fora':'em casa')+'</div>'}</div>
     <div class="tile"><div class="tl">Custo/mês</div><div class="tv">${priced?fmtMoney(costMo):'—'}</div><div class="ts">${priced? (full?'melhor preço por item':priced+' de '+total+' itens com preço') : 'preencha os preços'}</div></div>
     <div class="tile"><div class="tl">Custo/dia</div><div class="tv">${full?fmtMoney(costMo/30.4):'—'}</div><div class="ts">comida em casa</div></div>
     <div class="tile"><div class="tl">R$/g proteína</div><div class="tv">${full&&protMo>0?fmtMoney(costMo/protMo):'—'}</div><div class="ts">eficiência</div></div>
@@ -1126,6 +1138,13 @@ function openAddItem(prefill){
   if(prefill){
     $('ai_food').value='__new__';
     $('ai_newfood').style.display='block';
+    if(window._offMicro){
+      const note=document.createElement('div');
+      note.className='cardnote';
+      note.style.cssText='padding:6px 0 0; color:var(--tint-text);';
+      note.textContent='✓ Micronutrientes do rótulo capturados (fibra, ferro, cálcio…) — vão contar no balanço.';
+      $('ai_newfood').appendChild(note);
+    }
     $('nf_name').value=prefill.name||'';
     $('nf_unit').value='g';
     $('nf_buyUnit').value=prefill.buyUnit||'';
@@ -1140,14 +1159,17 @@ function confirmAddItem(){
     const name=$('nf_name').value.trim();
     if(!name){ toast('Dê um nome ao alimento'); return; }
     foodId='cf_'+Date.now();
-    state.customFoods.push({
+    const nf={
       id:foodId, name,
       unit:$('nf_unit').value,
       buyUnit:$('nf_buyUnit').value.trim()||'un',
       factor:parseFloat($('nf_factor').value)||1,
       kcal:parseFloat($('nf_kcal').value)||0,
       prot:parseFloat($('nf_prot').value)||0
-    });
+    };
+    if(window._offMicro && nf.unit==='g'){ nf.micro=window._offMicro; }
+    window._offMicro=null;
+    state.customFoods.push(nf);
   }
   const qty=parseFloat($('ai_qty').value)||0, times=parseFloat($('ai_times').value)||0;
   if(qty<=0||times<=0){ toast('Preencha quantidade e vezes/semana'); return; }
@@ -1456,7 +1478,7 @@ function weekKey(){
   const d=new Date();
   const day=(d.getDay()+6)%7;               /* 0=segunda */
   const mon=new Date(d); mon.setDate(d.getDate()-day);
-  return mon.toISOString().slice(0,10);
+  return new Date(mon.getTime()-mon.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 function todayIdx(){ return (new Date().getDay()+6)%7; }
 function rowQty(key, def){ return state.qtyOv[key]!=null?state.qtyOv[key]:def; }
@@ -1518,6 +1540,32 @@ function weekPlanData(){
     plan.push(meals);
   }
   return plan;
+}
+function uniNut(){ const t=zeroNut(); t.kcal=state.uniMeal.kcal||0; t.prot=state.uniMeal.prot||0; return t; }
+function openUniMeal(){
+  openSheet(`
+    <h3>Almoço fora de casa</h3>
+    <p class="ssub">Nos dias sem almoço em casa, o app conta esta refeição (ex: bandejão/RU). Estime o prato típico — conta calorias e proteína no balanço; micronutrientes não (não dá pra saber do prato de lá).</p>
+    ${switchRow('um_on','Contar o almoço da faculdade no balanço', state.uniMeal.enabled)}
+    <div class="formgrid">
+      <label>Nome</label>
+      <input class="field" id="um_label" value="${esc(state.uniMeal.label)}" placeholder="ex: bandejão do RU">
+      <div class="f2">
+        <div><label>Calorias (aprox.)</label><input class="field" id="um_kcal" type="number" min="0" value="${state.uniMeal.kcal}"></div>
+        <div><label>Proteína g (aprox.)</label><input class="field" id="um_prot" type="number" min="0" value="${state.uniMeal.prot}"></div>
+      </div>
+    </div>
+    <div class="cardnote" style="padding:4px 0 10px;">Referência: prato de RU com arroz, feijão, carne e salada fica tipicamente entre 700–900 kcal e 30–40 g de proteína. Comeu algo muito diferente num dia? Desmarque a caixinha e registre em "fora do plano".</div>
+    <button class="btn tint block" onclick="saveUniMeal()">Salvar</button>
+  `);
+}
+function saveUniMeal(){
+  state.uniMeal.enabled=$('um_on').checked;
+  state.uniMeal.label=$('um_label').value.trim()||'almoço na faculdade';
+  state.uniMeal.kcal=parseFloat($('um_kcal').value)||0;
+  state.uniMeal.prot=parseFloat($('um_prot').value)||0;
+  closeSheet(); render(); save();
+  toast('Almoço fora de casa atualizado ✓');
 }
 function mealNutrients(items){
   const t={kcal:0, prot:0};
@@ -1584,12 +1632,27 @@ function renderWeekPlan(){
   plan.forEach((meals, day)=>{
     html+=`<div class="daycard">
       <div class="dhead"><span>${DAY_NAMES[day]}${day===tIdx?' · hoje':''}</span>
-      <span class="dk">${meals.filter(m=>!m.out&&log[day+'_'+m.meal]).length}/${meals.filter(m=>!m.out).length} ✓</span></div>`;
+      <span class="dk">${meals.filter(m=>(!m.out||state.uniMeal.enabled)&&log[day+'_'+m.meal]).length}/${meals.filter(m=>!m.out||state.uniMeal.enabled).length} ✓</span></div>`;
     meals.forEach(m=>{
       const md=MEAL_DEFS[m.meal];
       if(m.out){
-        html+=`<div class="mealrow out"><div style="width:22px;"></div>
-          <div class="mbody"><div class="mname">${md.icon} ${md.label} — na faculdade</div></div></div>`;
+        if(state.uniMeal.enabled){
+          const eatenU=!!log[day+'_'+m.meal];
+          const nU=uniDayNut(wk, day);
+          const pick=(state.uniPick[wk]||{})[day];
+          html+=`<div class="mealrow ${eatenU?'eaten':''}">
+            <button class="check ${eatenU?'on':''}" onclick="toggleMeal(${day},'${m.meal}')"></button>
+            <div class="mbody" style="cursor:pointer;" onclick="openUniPicker(${day})">
+              <div class="mname">${md.icon} ${md.label} — ${esc(trunc(uniDayLabel(wk,day),26))} ▾</div>
+              <div class="mitems">${nU.kcal.toFixed(0)} kcal · ${nU.prot.toFixed(0)} g proteína${pick?' · micros ✓':''} · toque para escolher o prato</div>
+            </div>
+          </div>`;
+        }else{
+          html+=`<div class="mealrow out"><div style="width:22px;"></div>
+            <div class="mbody" style="cursor:pointer;" onclick="openUniPicker(${day})">
+              <div class="mname">${md.icon} ${md.label} — fora de casa (não contado)</div>
+            </div></div>`;
+        }
         return;
       }
       const eaten=!!log[day+'_'+m.meal];
@@ -1625,7 +1688,14 @@ function renderNutriBalance(){
   let exp=zeroNut(), real=zeroNut(), anyLogged=false;
   plan.forEach((meals,day)=>{
     meals.forEach(m=>{
-      if(m.out) return;
+      if(m.out){
+        if(state.uniMeal.enabled){
+          const n=uniDayNut(wk, day);
+          exp=sumNut(exp,n);
+          if(log[day+'_'+m.meal]){ real=sumNut(real,n); anyLogged=true; }
+        }
+        return;
+      }
       const n=mealNutrients(m.items);
       exp=sumNut(exp,n);
       if(log[day+'_'+m.meal]){ real=sumNut(real,n); anyLogged=true; }
@@ -1821,16 +1891,135 @@ function logRecipe(id){
   toast('Registrado no dia de hoje ✓');
 }
 
+/* ==================== BIBLIOTECA DE PRATOS ==================== */
+function dishById(id){ return state.dishes.find(d=>d.id===id); }
+function uniDayNut(wk, day){
+  const pick=(state.uniPick[wk]||{})[day];
+  const d=pick&&dishById(pick);
+  return d? mealNutrients(d.items) : uniNut();
+}
+function uniDayLabel(wk, day){
+  const pick=(state.uniPick[wk]||{})[day];
+  const d=pick&&dishById(pick);
+  return d? d.name : state.uniMeal.label;
+}
+function openDishEditor(dishId, ret){
+  window._dishReturn=ret||null;
+  const d=dishId? dishById(dishId):null;
+  window._dishDraft = d? JSON.parse(JSON.stringify(d)) : {id:null, name:'', items:[{fid:'arroz', qty:150}]};
+  renderDishEditor();
+}
+function renderDishEditor(){
+  const dr=window._dishDraft;
+  const n=mealNutrients(dr.items);
+  const foodOpts=sel=>allFoods().map(f=>`<option value="${f.id}" ${f.id===sel?'selected':''}>${esc(f.name)} (${f.unit})</option>`).join('');
+  let rows='';
+  dr.items.forEach((it,i)=>{
+    rows+=`<div style="display:flex; gap:8px; margin-bottom:8px;">
+      <select class="field" style="flex:1; min-width:0;" onchange="window._dishDraft.items[${i}].fid=this.value; window._dishDraft.name=$('dd_name').value; renderDishEditor();">${foodOpts(it.fid)}</select>
+      <input class="field" type="number" min="0" style="width:84px; flex:none;" value="${it.qty}" onchange="window._dishDraft.items[${i}].qty=parseFloat(this.value)||0; window._dishDraft.name=$('dd_name').value; renderDishEditor();">
+      <button class="iconbtn" style="align-self:center;" onclick="window._dishDraft.name=$('dd_name').value; window._dishDraft.items.splice(${i},1); renderDishEditor();">✕</button>
+    </div>`;
+  });
+  openSheet(`
+    <h3>${dr.id?'Editar prato':'Novo prato'}</h3>
+    <p class="ssub">Monte pelos ingredientes do cardápio — assim contam calorias, proteína E micronutrientes.</p>
+    <div class="formgrid">
+      <label>Nome do prato</label>
+      <input class="field" id="dd_name" value="${esc(dr.name)}" placeholder="ex: RU: frango grelhado + arroz/feijão">
+    </div>
+    <label style="font-size:12.5px; font-weight:700; color:var(--ink2); display:block; margin:10px 0 6px;">Ingredientes (qtd na unidade do alimento)</label>
+    ${rows}
+    <button class="btn plain compact" onclick="window._dishDraft.name=$('dd_name').value; window._dishDraft.items.push({fid:'arroz',qty:100}); renderDishEditor();">＋ ingrediente</button>
+    <div class="cardnote" style="padding:10px 0;">≈ <b>${n.kcal.toFixed(0)} kcal · ${n.prot.toFixed(0)} g proteína</b> por porção · micronutrientes incluídos ✓<br>Dica: alimento que não existe ainda (feijão, farofa…)? Cadastre antes em Dieta → adicionar item (pode escanear).</div>
+    <button class="btn tint block" onclick="saveDish()">Salvar prato</button>
+    ${dr.id?'<button class="btn danger block" style="margin-top:8px;" onclick="deleteDish()">Excluir prato</button>':''}
+  `);
+}
+function saveDish(){
+  const dr=window._dishDraft; if(!dr) return;
+  dr.name=($('dd_name')||{value:''}).value.trim();
+  dr.items=dr.items.filter(it=>it.qty>0&&food(it.fid));
+  if(!dr.name){ toast('Dê um nome ao prato'); return; }
+  if(!dr.items.length){ toast('Adicione ao menos um ingrediente'); return; }
+  if(dr.id){
+    const i=state.dishes.findIndex(d=>d.id===dr.id);
+    if(i>=0) state.dishes[i]=dr;
+  }else{
+    dr.id='dish_'+Date.now();
+    state.dishes.push(dr);
+  }
+  save(); render();
+  dishReturn();
+  toast('Prato salvo ✓');
+}
+function deleteDish(){
+  const dr=window._dishDraft; if(!dr||!dr.id) return;
+  if(!confirm('Excluir este prato da biblioteca?')) return;
+  state.dishes=state.dishes.filter(d=>d.id!==dr.id);
+  Object.keys(state.uniPick).forEach(wk=>{
+    Object.keys(state.uniPick[wk]).forEach(day=>{
+      if(state.uniPick[wk][day]===dr.id) delete state.uniPick[wk][day];
+    });
+  });
+  save(); render();
+  dishReturn();
+}
+function dishReturn(){
+  const ret=window._dishReturn; window._dishReturn=null; window._dishDraft=null;
+  if(ret&&ret.type==='uni') openUniPicker(ret.day);
+  else if(ret&&ret.type==='adhoc') openAdhoc(ret.day);
+  else closeSheet();
+}
+function openUniPicker(day){
+  const wk=weekKey();
+  const cur=(state.uniPick[wk]||{})[day];
+  let list=`
+    <div class="row" style="cursor:pointer;" onclick="setUniPick(${day}, null)">
+      <div class="grow"><div class="rtitle">Estimativa padrão</div><div class="rsub">${state.uniMeal.kcal} kcal · ${state.uniMeal.prot} g prot · sem micros</div></div>
+      ${!cur?'<span class="pill softgreen">este dia</span>':''}
+    </div>`;
+  state.dishes.forEach(d=>{
+    const n=mealNutrients(d.items);
+    list+=`
+      <div class="row" style="cursor:pointer;" onclick="setUniPick(${day}, '${d.id}')">
+        <div class="grow"><div class="rtitle">${esc(trunc(d.name,30))}</div><div class="rsub">${n.kcal.toFixed(0)} kcal · ${n.prot.toFixed(0)} g prot · micros ✓</div></div>
+        ${cur===d.id?'<span class="pill softgreen">este dia</span>':''}
+        <button class="iconbtn" onclick="event.stopPropagation(); openDishEditor('${d.id}',{type:'uni',day:${day}})">✎</button>
+      </div>`;
+  });
+  openSheet(`
+    <h3>Prato de ${DAY_NAMES[day]} — almoço fora</h3>
+    <p class="ssub">Escolha o prato servido nesse dia. Os pratos se repetem — sua biblioteca cresce e depois é só selecionar.</p>
+    ${list}
+    <button class="btn tint block" style="margin-top:12px;" onclick="openDishEditor(null,{type:'uni',day:${day}})">＋ Criar prato novo</button>
+    <button class="btn plain block" style="margin-top:8px;" onclick="openUniMeal()">Configurar estimativa padrão</button>
+  `);
+}
+function setUniPick(day, dishId){
+  const wk=weekKey();
+  if(!state.uniPick[wk]) state.uniPick[wk]={};
+  if(dishId) state.uniPick[wk][day]=dishId; else delete state.uniPick[wk][day];
+  const keys=Object.keys(state.uniPick).sort();
+  while(keys.length>10){ delete state.uniPick[keys.shift()]; }
+  closeSheet(); render(); save();
+  toast(dishId?'Prato do dia definido ✓':'Usando estimativa padrão');
+}
+
 /* ==================== FORA DO PLANO ==================== */
 function openAdhoc(day){
   const opts=allFoods().map(f=>`<option value="${f.id}">${esc(f.name)} (${f.unit})</option>`).join('');
+  const dishOpts=state.dishes.length
+    ? '<optgroup label="Pratos salvos (micros ✓)">'+state.dishes.map(d=>`<option value="d_${d.id}">🍽 ${esc(trunc(d.name,32))}</option>`).join('')+'</optgroup>'
+    : '';
   window._adhocDay=day;
   openSheet(`
     <h3>Fora do plano — ${DAY_NAMES[day]}</h3>
     <p class="ssub">Comeu algo diferente do cardápio? Registre aqui que entra no consumo real. Se substituiu uma refeição, desmarque a caixinha dela no cardápio.</p>
     <div class="formgrid">
       <label>O que você comeu</label>
-      <select class="field" id="ah_food">${opts}<option value="__free__">outra comida (digitar)…</option></select>
+      <select class="field" id="ah_food">${dishOpts}<optgroup label="Alimentos">${opts}</optgroup><option value="__free__">outra comida (digitar)…</option></select>
+      <button class="btn plain compact" style="align-self:flex-start;" onclick="openDishEditor(null,{type:'adhoc',day:${day}})">＋ criar prato novo</button>
       <div id="ah_qtybox">
         <label>Quantidade (na unidade do alimento)</label>
         <input class="field" id="ah_qty" type="number" min="0" value="100">
@@ -1848,11 +2037,14 @@ function openAdhoc(day){
     </div>
     <button class="btn tint block" onclick="saveAdhoc()">Registrar</button>
   `);
-  $('ah_food').addEventListener('change', e=>{
-    const free=e.target.value==='__free__';
+  const syncAhBoxes=()=>{
+    const v=$('ah_food').value;
+    const free=v==='__free__', dish=v.startsWith('d_');
     $('ah_freebox').style.display=free?'block':'none';
-    $('ah_qtybox').style.display=free?'none':'block';
-  });
+    $('ah_qtybox').style.display=(free||dish)?'none':'block';
+  };
+  $('ah_food').addEventListener('change', syncAhBoxes);
+  syncAhBoxes();
 }
 function saveAdhoc(){
   const day=window._adhocDay;
@@ -1860,7 +2052,12 @@ function saveAdhoc(){
   if(!state.adhoc[wk]) state.adhoc[wk]=[];
   const sel=$('ah_food').value;
   let entry;
-  if(sel==='__free__'){
+  if(sel.startsWith('d_')){
+    const d=dishById(sel.slice(2));
+    if(!d){ toast('Prato não encontrado'); return; }
+    entry={id:'a_'+Date.now(), day, fid:null, label:d.name,
+      items:JSON.parse(JSON.stringify(d.items))};
+  }else if(sel==='__free__'){
     const label=$('ah_label').value.trim();
     if(!label){ toast('Dê um nome à comida'); return; }
     entry={id:'a_'+Date.now(), day, fid:null, label,
@@ -1961,7 +2158,15 @@ function buildSummary(){
   let done=0, total=0, exp=zeroNut(), real=zeroNut();
   plan.forEach((meals,day)=>{
     meals.forEach(m=>{
-      if(m.out) return;
+      if(m.out){
+        if(state.uniMeal.enabled){
+          total++;
+          const n=uniDayNut(wk, day);
+          exp=sumNut(exp,n);
+          if(log[day+'_'+m.meal]){ done++; real=sumNut(real,n); }
+        }
+        return;
+      }
       total++;
       const n=mealNutrients(m.items);
       exp=sumNut(exp,n);
@@ -2315,7 +2520,24 @@ async function fetchOFF(code){
   if(j.status!==1||!j.product) return null;
   const p=j.product, n=p.nutriments||{};
   const kcal100 = n['energy-kcal_100g']!=null ? n['energy-kcal_100g'] : (n['energy_100g']!=null? n['energy_100g']/4.184 : 0);
+  /* micronutrientes do rótulo (OFF normaliza em gramas) — convertidos para as unidades do app */
+  const gv=k=>{ const v=parseFloat(n[k+'_100g']); return isFinite(v)?v:null; };
+  const conv=(k,mult,max)=>{ const v=gv(k); if(v==null) return 0; const r=v*mult; return (r>=0&&r<=max)?r:0; };
+  const micro100={
+    fib: conv('fiber',1,80),            /* g */
+    fe:  conv('iron',1000,200),         /* mg */
+    ca:  conv('calcium',1000,5000),     /* mg */
+    mg:  conv('magnesium',1000,2000),   /* mg */
+    zn:  conv('zinc',1000,200),         /* mg */
+    k:   conv('potassium',1000,8000),   /* mg */
+    va:  conv('vitamin-a',1e6,50000),   /* µg */
+    vc:  conv('vitamin-c',1000,3000),   /* mg */
+    b12: conv('vitamin-b12',1e6,1000),  /* µg */
+    fol: conv('folates',1e6,5000)       /* µg */
+  };
+  const hasMicro=Object.values(micro100).some(v=>v>0);
   return {
+    micro100: hasMicro?micro100:null,
     name:(function(){
       const nm=(p.product_name_pt||p.product_name||'').trim();
       const br=(p.brands||'').split(',')[0].trim();
@@ -2340,6 +2562,9 @@ async function onBarcode(code){
     return;
   }
   if(prod){
+    window._offMicro = prod.micro100
+      ? Object.fromEntries(Object.entries(prod.micro100).map(([k,v])=>[k,+(v/100).toPrecision(4)]))
+      : null;   /* por grama */
     openAddItem({
       name:prod.name||('Produto '+code),
       buyUnit:prod.qtyLabel||'kg',
@@ -2349,6 +2574,7 @@ async function onBarcode(code){
     });
     toast('Produto encontrado ✓ confira os dados');
   }else{
+    window._offMicro=null;
     openAddItem({name:'', buyUnit:'', factor:1000, kcalPerUnit:0, protPerUnit:0});
     toast('Produto não encontrado — preencha manualmente');
   }
