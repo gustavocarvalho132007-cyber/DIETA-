@@ -711,7 +711,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
-const APP_VERSION='4.3';
+const APP_VERSION='4.5';
 const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
@@ -2673,8 +2673,28 @@ async function startScan(){
           const caps=track.getCapabilities?track.getCapabilities():{};
           if(caps.focusMode&&caps.focusMode.includes('continuous'))
             await track.applyConstraints({advanced:[{focusMode:'continuous'}]});
+          /* controles de zoom e lanterna, quando o aparelho suporta */
+          const ctr=document.createElement('div');
+          ctr.style.cssText='display:flex; gap:10px; align-items:center; padding:8px 4px 2px;';
+          if(caps.zoom&&caps.zoom.max>caps.zoom.min){
+            const z=document.createElement('input');
+            z.type='range'; z.min=caps.zoom.min; z.max=Math.min(caps.zoom.max, caps.zoom.min*4||caps.zoom.max);
+            z.step=caps.zoom.step||0.1; z.value=caps.zoom.min; z.style.flex='1';
+            z.oninput=()=>{ try{ track.applyConstraints({advanced:[{zoom:parseFloat(z.value)}]}); }catch(e){} };
+            const zl=document.createElement('span');
+            zl.textContent='🔍'; zl.style.fontSize='14px';
+            ctr.appendChild(zl); ctr.appendChild(z);
+          }
+          if(caps.torch){
+            let on=false;
+            const tb=document.createElement('button');
+            tb.className='btn plain compact'; tb.textContent='🔦';
+            tb.onclick=()=>{ on=!on; try{ track.applyConstraints({advanced:[{torch:on}]}); }catch(e){} tb.className='btn compact '+(on?'tint':'plain'); };
+            ctr.appendChild(tb);
+          }
+          if(ctr.children.length&&reader) reader.appendChild(ctr);
         }catch(e){}
-        if(st) st.textContent='câmera ativa (leitor nativo) — centralize o código';
+        if(st) st.textContent='dica: afaste 10–15 cm e use o zoom 🔍 — o foco de perto é o que embaça';
         const loop=async()=>{
           if(!scanStream) return;
           try{
@@ -2730,6 +2750,19 @@ async function fetchOFF(code){
     fol: conv('folates',1e6,5000)       /* µg */
   };
   const hasMicro=Object.values(micro100).some(v=>v>0);
+  let qty=parseFloat(p.product_quantity)||0;
+  let qtyLabel=(p.quantity||'').trim();
+  if(!qty){
+    const srcTxt=qtyLabel||p.product_name_pt||p.product_name||'';
+    const sz=parseSize(srcTxt);
+    if(sz&&sz.g){
+      qty=sz.g;
+      if(!qtyLabel) qtyLabel=/\d[.,]?\d*\s*(L|ML)\b/i.test(srcTxt)
+        ? (sz.g>=1000? (sz.g/1000)+' L' : sz.g+' ml')
+        : fmtQty({unit:'g'},sz.g);
+    }
+    else if(sz&&sz.un){ qty=sz.un; if(!qtyLabel) qtyLabel=sz.un+' un'; }
+  }
   return {
     micro100: hasMicro?micro100:null,
     name:(function(){
@@ -2737,8 +2770,7 @@ async function fetchOFF(code){
       const br=(p.brands||'').split(',')[0].trim();
       return (br && !nm.toLowerCase().includes(br.toLowerCase())) ? (nm+' '+br).trim() : nm;
     })(),
-    qty:parseFloat(p.product_quantity)||0,
-    qtyLabel:(p.quantity||'').trim(),
+    qty, qtyLabel,
     kcal100, prot100:n.proteins_100g!=null?n.proteins_100g:0
   };
 }
@@ -2866,7 +2898,24 @@ function applyAssoc(){
     kcal100:prod.kcal100||0, prot100:prod.prot100||0
   };
   if(!state.variants[fid]) state.variants[fid]=[];
-  state.variants[fid].push(v);
+  /* já existe essa marca (mesmo EAN ou nome parecido)? então atualiza em vez de duplicar */
+  const dup=state.variants[fid].find(x=>
+    (x.code&&x.code===v.code) ||
+    normTxt(x.label).replace(/\s+/g,'')===normTxt(v.label).replace(/\s+/g,'') ||
+    (normTxt(v.label).includes(normTxt(x.label).split(/\s+/).slice(0,2).join(' '))&&normTxt(x.label).split(/\s+/).length>=2)
+  );
+  if(dup){
+    dup.code=v.code||dup.code;
+    dup.label=v.label;
+    dup.qty=v.qty; dup.qtyLabel=v.qtyLabel;
+    if(v.price>0){ dup.price=v.price; dup.storeId=v.storeId||dup.storeId; }
+    dup.d=v.d;
+    if(v.kcal100) dup.kcal100=v.kcal100;
+    if(v.prot100) dup.prot100=v.prot100;
+    v.id=dup.id;
+  } else {
+    state.variants[fid].push(v);
+  }
   const useNut=$('as_nut')?$('as_nut').checked:false;
   if(useNut&&f.unit==='g'){
     const o=state.foodOv[fid]||{};
