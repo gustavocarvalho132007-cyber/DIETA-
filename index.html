@@ -535,6 +535,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
     </div>
     <div class="lcard" style="padding:12px 16px;">
       <button class="btn soft block" onclick="openNfceImport()">📄 Importar nota fiscal (QR do cupom)</button>
+      <button class="btn soft block" style="margin-top:8px;" onclick="openPasteImport()">📝 Colar lista de preços (texto)</button>
     </div>
     <div id="mixedWrap"></div>
     <div id="storesWrap"></div>
@@ -2757,6 +2758,156 @@ function removeAssoc(fid){
   removeAssocCore(fid);
   save(); render(); openAssoc(fid);
   toast('De volta à unidade padrão — preços convertidos');
+}
+
+/* ==================== IMPORTAR LISTA COLADA ==================== */
+/* peso típico (g) da unidade de consumo dos alimentos "un/fatia" — p/ converter preço por kg */
+const UNIT_G={banana:120, maca:130, iogurte:170, ovo:60, pao:25};
+function parseSize(desc){
+  const d=normTxt(desc);
+  let m=d.match(/(\d+[.,]?\d*)\s*KG\b/);
+  if(m&&parseFloat(m[1].replace(',','.'))<60) return {g:parseFloat(m[1].replace(',','.'))*1000};
+  m=d.match(/(\d+)\s*(?:G|GR|GRAMAS)\b/);
+  if(m) return {g:parseFloat(m[1])};
+  m=d.match(/(\d+[.,]?\d*)\s*L\b/);
+  if(m&&parseFloat(m[1].replace(',','.'))<20) return {g:parseFloat(m[1].replace(',','.'))*1000};
+  m=d.match(/(\d+)\s*ML\b/);
+  if(m) return {g:parseFloat(m[1])};
+  m=d.match(/(\d+)\s*(?:UN|UNIDADES|OVOS|UNID)\b/);
+  if(m) return {un:parseInt(m[1])};
+  if(/\bKG\b/.test(d)) return {g:1000};
+  m=d.match(/\b(\d{2,4})\s*$/);           /* número solto no fim (ex: "azeite gallo 250") */
+  if(m){ const v=parseInt(m[1]); if(v>=50&&v<=5000) return {g:v}; }
+  return null;
+}
+function suggPrice(item, fid){
+  const f=fid&&food(fid);
+  if(!f) return item.price;
+  if(!item.size){
+    /* frutas sem tamanho anotado: hortifruti vende por kg */
+    if((fid==='banana'||fid==='maca') && f.unit==='un' && UNIT_G[fid])
+      return +(item.price*f.factor*UNIT_G[fid]/1000).toFixed(2);
+    return item.price;
+  }
+  let neededG=null;
+  if(f.unit==='g') neededG=f.factor;
+  else if(UNIT_G[fid]) neededG=f.factor*UNIT_G[fid];
+  if(item.size.un&&f.unit!=='g') return +(item.price*f.factor/item.size.un).toFixed(2);
+  if(item.size.g&&neededG) return +(item.price*neededG/item.size.g).toFixed(2);
+  return item.price;
+}
+function parsePriceList(text){
+  const groups=[]; let cur={name:'', items:[]};
+  String(text||'').split(/\n+/).forEach(line=>{
+    line=line.replace(/\t/g,' ').trim();
+    if(!line) return;
+    const prices=[...line.matchAll(/(\d+[.,]\d{2})\b/g)].map(m=>parseFloat(m[1].replace(',','.')));
+    if(!prices.length){
+      if(cur.items.length) groups.push(cur);
+      cur={name:line.slice(0,28), items:cur.items.length||!cur.name?[]:cur.items};
+      cur.items=[];
+      return;
+    }
+    const promo=/promo/i.test(line);
+    const price=promo? Math.min(...prices) : prices[0];
+    const desc=line.replace(/(\d+[.,]\d{2})\b/g,'').replace(/promo/ig,'').replace(/r\$/ig,'').replace(/\s{2,}/g,' ').trim();
+    if(!desc) return;
+    cur.items.push({desc, price, size:parseSize(desc)});
+  });
+  if(cur.items.length) groups.push(cur);
+  return groups;
+}
+function openPasteImport(){
+  openSheet(`
+    <h3>Colar lista de preços</h3>
+    <p class="ssub">Cole a lista que você anotou. Uma linha por item ("nome  preço"); uma linha só com o nome do mercado inicia um novo grupo. "promo" usa o preço promocional.</p>
+    <textarea class="field" id="pasteText" rows="9" style="resize:vertical; font-size:13px; line-height:1.5;" placeholder="Assaí\nOvo 20un  13,50\nPeito de frango kg  17,90\n\nMini Extra\nBanana prata kg  9,99 promo 5,99"></textarea>
+    <button class="btn tint block" style="margin-top:12px;" onclick="analyzePaste()">Analisar</button>
+  `);
+}
+function analyzePaste(){
+  const groups=parsePriceList($('pasteText').value);
+  if(!groups.length){ toast('Não encontrei itens com preço'); return; }
+  window._paste=groups;
+  let html='';
+  let idx=0;
+  groups.forEach((g,gi)=>{
+    const storeOpts=state.stores.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')
+      +`<option value="__new__" selected>＋ criar novo mercado</option>`;
+    html+=`
+      <div class="cardtitle" style="padding:${gi?'20px':'6px'} 0 6px;">Grupo ${gi+1}${g.name?' · '+esc(g.name):''}</div>
+      <div class="f2" style="margin-bottom:10px;">
+        <select class="field" id="pg_store_${gi}" onchange="$('pg_new_${gi}').style.display=this.value==='__new__'?'block':'none'">${storeOpts}</select>
+        <input class="field" id="pg_new_${gi}" value="${esc(g.name||'Mercado '+(gi+1))}" placeholder="nome do mercado">
+      </div>`;
+    g.items.forEach((it,ii)=>{
+      const guess=guessFood(it);
+      it.sugg=suggPrice(it, guess);
+      const foodOpts='<option value="">— ignorar</option>'+allFoods().map(f=>`<option value="${f.id}" ${guess===f.id?'selected':''}>${esc(f.name)}</option>`).join('');
+      html+=`
+        <div style="border-bottom:.5px solid var(--sep); padding:8px 0;">
+          <div style="font-size:13px; font-weight:700;">${esc(trunc(it.desc,40))} <span style="color:var(--ink2); font-weight:500;">· anotado ${fmtMoney(it.price)}</span></div>
+          <div class="f2" style="margin-top:6px;">
+            <select class="field" id="pi_f_${gi}_${ii}" onchange="updatePasteRow(${gi},${ii},this.value)">${foodOpts}</select>
+            <input class="field" id="pi_p_${gi}_${ii}" type="number" step="0.01" value="${guess?it.sugg.toFixed(2):''}" placeholder="preço na unid. de compra">
+          </div>
+          ${guess&&Math.abs(it.sugg-it.price)>0.01?`<div class="cardnote" style="padding:4px 0 0;" id="pi_n_${gi}_${ii}">convertido para a unidade de compra do item (${esc(food(guess).buyUnit)})</div>`:`<div id="pi_n_${gi}_${ii}"></div>`}
+        </div>`;
+      idx++;
+    });
+  });
+  openSheet(`
+    <h3>Confira e registre</h3>
+    <p class="ssub">${idx} itens em ${groups.length} grupo(s). Itens sem correspondência ficam "ignorar" — selecione manualmente se quiser.</p>
+    ${html}
+    <button class="btn tint block" style="margin-top:14px;" onclick="applyPaste()">Registrar preços</button>
+  `);
+}
+function updatePasteRow(gi, ii, fid){
+  const it=window._paste[gi].items[ii];
+  const p=$('pi_p_'+gi+'_'+ii);
+  const note=$('pi_n_'+gi+'_'+ii);
+  if(!fid){ p.value=''; if(note) note.textContent=''; return; }
+  const s=suggPrice(it, fid);
+  p.value=s.toFixed(2);
+  if(note) note.textContent = Math.abs(s-it.price)>0.01 ? 'convertido para a unidade de compra do item ('+food(fid).buyUnit+')' : '';
+}
+function applyPaste(){
+  const groups=window._paste; if(!groups) return;
+  let count=0, storesUsed=new Set();
+  groups.forEach((g,gi)=>{
+    let storeId=$('pg_store_'+gi).value;
+    if(storeId==='__new__'){
+      const nm=($('pg_new_'+gi).value||'Mercado').trim()||'Mercado';
+      const existing=state.stores.find(s=>s.name.toLowerCase()===nm.toLowerCase());
+      if(existing) storeId=existing.id;
+      else{
+        storeId='s_'+Date.now()+'_'+gi;
+        state.stores.push({id:storeId, name:trunc(nm,24)});
+        state.prices[storeId]={};
+      }
+    }
+    g.items.forEach((it,ii)=>{
+      const fid=($('pi_f_'+gi+'_'+ii)||{value:''}).value;
+      const p=parseFloat(($('pi_p_'+gi+'_'+ii)||{value:0}).value)||0;
+      if(!fid||p<=0) return;
+      if(!state.prices[storeId]) state.prices[storeId]={};
+      const e=state.prices[storeId][fid]||{p:0,h:[]};
+      /* mesmo alimento repetido no grupo (ex: 2 marcas): fica o mais barato */
+      const setNow = window._pasteSet&&window._pasteSet[storeId+'_'+fid];
+      if(setNow && e.p>0 && e.p<=p) return;
+      e.p=p;
+      const last=e.h[e.h.length-1];
+      if(last&&last.d===todayISO()) last.p=p; else e.h.push({d:todayISO(),p});
+      state.prices[storeId][fid]=e;
+      if(!window._pasteSet) window._pasteSet={};
+      window._pasteSet[storeId+'_'+fid]=true;
+      count++; storesUsed.add(storeId);
+    });
+  });
+  window._paste=null; window._pasteSet=null;
+  closeSheet(); render(); save();
+  toast(count+' preços registrados em '+storesUsed.size+' mercado(s) ✓');
 }
 
 /* ==================== NOTA FISCAL (NFC-e) ==================== */

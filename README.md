@@ -136,3 +136,7 @@ Você tem acesso ao cardápio do RU? Monte cada prato **pelos ingredientes** (co
 - No almoço fora de casa (cardápio): toque na refeição → escolha o prato daquele dia na biblioteca (ou crie na hora). O dia passa a contar o prato real em vez da estimativa padrão.
 - No "fora do plano": os pratos salvos aparecem no topo da lista — um toque registra o prato completo.
 - Ingrediente que ainda não existe no app (feijão, farofa…)? Cadastre antes em Dieta → adicionar item (escaneando, os micros do rótulo vêm juntos).
+
+## Colar lista de preços (texto)
+
+Anotou os preços no bloco de notas enquanto passava nos mercados? Em **Preços → Colar lista de preços**, cole o texto: uma linha por item ("nome  preço"), linha só com nome inicia um novo mercado, e "9,99 promo 5,99" usa o preço promocional. O app reconhece os itens, e **converte embalagens automaticamente** para a unidade de compra: "ovo 20un 13,50" vira R$ 8,10/dúzia, "maçã kg 4,99" vira R$ 0,65/un, "aveia 450g 8,89" vira R$ 19,76/kg — deixando tudo comparável. Itens repetidos no mesmo mercado (3 marcas de pão) registram o mais barato; itens fora da dieta ficam como "ignorar". Você confere tudo antes de registrar.
