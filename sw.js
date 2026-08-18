@@ -1,5 +1,5 @@
 /* Service worker: deixa o app abrir offline depois da primeira visita */
-const CACHE = 'dieta-v47';
+const CACHE = 'dieta-v48';
 const ASSETS = ['.', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

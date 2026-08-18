@@ -712,7 +712,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
-const APP_VERSION='4.7';
+const APP_VERSION='4.8';
 const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
@@ -739,6 +739,8 @@ const FOODS = [
    micro:{fib:0,    fe:0.005, ca:9.12, mg:0.85, zn:0.033, k:13.2, va:2.58,vc:0.05, b12:0.03, fol:0.05}},
   {id:'arroz',    name:'Arroz',                 unit:'g',     buyUnit:'kg',                 factor:1000, kcal:3.60, prot:0.072,
    micro:{fib:0.016,fe:0.007, ca:0.04, mg:0.3,  zn:0.012, k:0.6,  va:0,   vc:0,    b12:0,    fol:0.08}},
+  {id:'leite',    name:'Leite integral',        unit:'g',     buyUnit:'1 L',                factor:1000, kcal:0.61, prot:0.031,
+   micro:{fib:0,    fe:0.0003,ca:1.13, mg:0.10, zn:0.0037,k:1.50, va:0.46,vc:0,    b12:0.0045,fol:0.05}},
 ];
 /* faixas de referência diárias (adulto, RDA/AI; max = limite superior UL quando existe) */
 const NUTRIENTS = [
@@ -810,6 +812,9 @@ const RECIPES=[
   {id:'arrozmexido', name:'Arroz mexido com ovo e legumes', time:'15 min', ut:['frigideira'],
    ing:[{fid:'arroz',q:150},{fid:'ovo',q:2},{fid:'vegetais',q:100},{fid:'azeite',q:5}], extra:'alho, sal',
    steps:'Aqueça o azeite, frite o alho, junte os legumes e depois o arroz já cozido. Abra espaço, mexa os ovos ali mesmo e misture tudo.'},
+  {id:'iogcaseiro', name:'Iogurte natural caseiro', time:'15 min + 8 h fermentando', ut:['micro'], serves:6,
+   ing:[{fid:'leite',q:1000},{fid:'iogurte',q:100}], extra:'nada mais — sério',
+   steps:'Aqueça 1 L de leite até quase ferver (micro-ondas serve), deixe amornar até ~45 °C (dá pra encostar o dedo por 5 s). Misture 100 g de iogurte natural, tampe e deixe 8 h num lugar morno (forno desligado, caixa térmica ou airfryer desligada). Gelou, virou ~1 kg de iogurte. Guarde 100 g para ser a "semente" do próximo — aí o custo vira só o leite.'},
   {id:'patefigado', name:'Patê de fígado', time:'25 min', ut:['frigideira','liqui'],
    ing:[{fid:'figado',q:100},{fid:'azeite',q:10}], extra:'cebola, sal',
    steps:'Refogue o fígado com cebola até cozinhar por completo. Bata no liquidificador com azeite até virar pasta. Ótimo no pão — e uma forma de comer fígado sem sentir o gosto forte.'},
@@ -944,6 +949,23 @@ function migrate(s){
     });
   });
   out.migIog=true;
+  /* funde o leite rastreado no alimento base */
+  const trackedLeite=out.customFoods.find(f=>f.track&&/^leite\s+integral/i.test(f.name));
+  if(trackedLeite){
+    Object.keys(out.prices).forEach(sid=>{
+      const e=out.prices[sid][trackedLeite.id];
+      if(e){
+        const cur=out.prices[sid]['leite'];
+        if(!cur||e.p<cur.p) out.prices[sid]['leite']=e;
+        delete out.prices[sid][trackedLeite.id];
+      }
+    });
+    if(out.variants[trackedLeite.id]){
+      out.variants['leite']=(out.variants['leite']||[]).concat(out.variants[trackedLeite.id]);
+      delete out.variants[trackedLeite.id];
+    }
+    out.customFoods=out.customFoods.filter(f=>f.id!==trackedLeite.id);
+  }
   if(out.qtyOv['lan_iogurte']!=null&&out.qtyOv['lan_iogurte']<=5) out.qtyOv['lan_iogurte']*=160;
   (out.dishes||[]).forEach(d=>(d.items||[]).forEach(it=>{ if(it.fid==='iogurte'&&it.qty<=5) it.qty*=160; }));
   Object.values(out.adhoc||{}).forEach(list=>(list||[]).forEach(a=>{ if(a.fid==='iogurte'&&a.qty<=5) a.qty*=160; }));
@@ -1519,13 +1541,14 @@ function renderDeals(){
   let recHtml='';
   const recs=RECIPES.map(r=>{
     let cost=0, ok=true;
+    const sv=r.serves||1;
     r.ing.forEach(i=>{
       const f=food(i.fid), bp=bestPrice(i.fid);
       if(!f||!bp){ ok=false; return; }
-      cost+=bp.price/f.factor*(i.q||i.qty||0);
+      cost+=bp.price/f.factor*(i.q||i.qty||0)/sv;
     });
     if(!ok) return null;
-    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q||i.qty})));
+    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:(i.q||i.qty)/sv})));
     return {r, cost, prot:n.prot};
   }).filter(Boolean).sort((a,b)=>a.cost-b.cost);
   recs.slice(0,8).forEach(x=>{
@@ -2035,7 +2058,8 @@ function renderRecipes(){
   scored.sort((a,b)=>a.st.miss.length-b.st.miss.length);
   let html='';
   scored.forEach(({r,st})=>{
-    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
+    const sv=r.serves||1;
+    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q/sv})));
     let badge;
     if(st.ok) badge='<span class="pill green">dá pra fazer</span>';
     else if(st.miss.length===1) badge='<span class="pill amber">falta: '+esc(trunc(st.miss[0],16))+'</span>';
@@ -2054,7 +2078,8 @@ function renderRecipes(){
 function openRecipe(id){
   const r=RECIPES.find(x=>x.id===id); if(!r) return;
   const st=recipeStatus(r);
-  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
+  const sv=r.serves||1;
+  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q/sv})));
   const ings=r.ing.map(i=>{
     const f=food(i.fid);
     const have=pantryHas(i.fid);
@@ -2069,6 +2094,7 @@ function openRecipe(id){
       <div class="tile"><div class="tl">Calorias</div><div class="tv">${n.kcal.toFixed(0)}<small> kcal</small></div><div class="ts">por porção</div></div>
       <div class="tile hero"><div class="tl">Proteína</div><div class="tv">${n.prot.toFixed(0)}<small> g</small></div><div class="ts">por porção</div></div>
     </div>
+    ${sv>1?'<div class="cardnote" style="padding:0 0 8px;">Rende '+sv+' porções — ingredientes abaixo são do preparo inteiro.</div>':''}
     ${ings}
     ${r.extra?'<div class="cardnote" style="padding:8px 0 0;">Extras de tempero: '+esc(r.extra)+'</div>':''}
     <div style="font-size:14px; line-height:1.65; margin-top:12px;">${esc(r.steps)}</div>
@@ -2079,9 +2105,10 @@ function logRecipe(id){
   const r=RECIPES.find(x=>x.id===id); if(!r) return;
   const wk=weekKey();
   if(!state.adhoc[wk]) state.adhoc[wk]=[];
-  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q})));
-  state.adhoc[wk].push({id:'a_'+Date.now(), day:todayIdx(), fid:null, label:r.name, qty:1,
-    kcal:+n.kcal.toFixed(0), prot:+n.prot.toFixed(1), items:r.ing.map(i=>({fid:i.fid, qty:i.q}))});
+  const sv=r.serves||1;
+  const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q/sv})));
+  state.adhoc[wk].push({id:'a_'+Date.now(), day:todayIdx(), fid:null, label:r.name+(sv>1?' (1 porção)':''), qty:1,
+    kcal:+n.kcal.toFixed(0), prot:+n.prot.toFixed(1), items:r.ing.map(i=>({fid:i.fid, qty:i.q/sv}))});
   closeSheet(); render(); save();
   toast('Registrado no dia de hoje ✓');
 }
