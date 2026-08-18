@@ -140,3 +140,17 @@ Você tem acesso ao cardápio do RU? Monte cada prato **pelos ingredientes** (co
 ## Colar lista de preços (texto)
 
 Anotou os preços no bloco de notas enquanto passava nos mercados? Em **Preços → Colar lista de preços**, cole o texto: uma linha por item ("nome  preço"), linha só com nome inicia um novo mercado, e "9,99 promo 5,99" usa o preço promocional. O app reconhece os itens, e **converte embalagens automaticamente** para a unidade de compra: "ovo 20un 13,50" vira R$ 8,10/dúzia, "maçã kg 4,99" vira R$ 0,65/un, "aveia 450g 8,89" vira R$ 19,76/kg — deixando tudo comparável. Itens repetidos no mesmo mercado (3 marcas de pão) registram o mais barato; itens fora da dieta ficam como "ignorar". Você confere tudo antes de registrar.
+
+## Radar de preços e "o que compensa"
+
+- **Todos os produtos contam**: ao colar uma lista, itens fora da dieta (batata, tomate, leite…) viram **produtos rastreados** — aparecem nos cartões de mercado e no radar de preços, mas não entram nos totais da dieta. Na próxima lista colada, eles são reconhecidos automaticamente pelo nome.
+- **💡 O que compensa — melhores compras** (aba Preços): para cada produto com preço, mostra o mercado mais barato e a economia % contra o mais caro, ordenado pela maior diferença. Frutas e legumes agora são registrados **por kg** (banana e maçã têm unidade de compra em kg, com o preço por unidade como referência secundária).
+- **👨‍🍳 O que compensa fazer**: as receitas do app ranqueadas por custo por porção (e R$ por g de proteína), usando o melhor preço de cada ingrediente entre seus mercados.
+
+## Distância dos mercados (preço × proximidade)
+
+Toque no **nome do mercado** (aba Preços) para editar nome, distância (m) e tempo a pé. Com as distâncias preenchidas:
+
+- Quando a diferença de preço entre mercados é pequena (tolerância padrão 5%, ajustável em **Ajustes → Compras**), a cesta mista, o roteiro e as melhores compras passam a indicar o **mais próximo** — com o rótulo "quase empate — vence por ser mais perto".
+- O roteiro por mercado mostra a distância/tempo de cada parada e o total de caminhada.
+- Tolerância 0% = sempre o mais barato, ignorando distância.

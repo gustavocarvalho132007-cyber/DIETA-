@@ -538,6 +538,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
       <button class="btn soft block" style="margin-top:8px;" onclick="openPasteImport()">📝 Colar lista de preços (texto)</button>
     </div>
     <div id="mixedWrap"></div>
+    <div id="dealsWrap"></div>
     <div id="storesWrap"></div>
     <div class="lcard cardnote" style="padding:14px 20px;">
       Preencha o preço pela <b>unidade de compra</b> (kg do arroz, dúzia de ovos…). Toque no nome do item para ver o histórico completo. ▲ subiu · ▼ caiu desde a última atualização. Fundo verde = mais barato entre os mercados.
@@ -591,6 +592,14 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
         </ol>
         <p>A chave (24 caracteres aleatórios) funciona como senha: só sincroniza quem a tiver.</p>
       </details>
+    </div>
+
+    <div class="lcard">
+      <div class="cardtitle">Compras</div>
+      <div class="row">
+        <div class="grow"><div class="rtitle">Preferir mercado mais próximo</div><div class="rsub">quando a diferença de preço for de até X% — toque no nome do mercado (aba Preços) para definir as distâncias</div></div>
+        <input class="numfield" id="g_tol" type="number" min="0" max="30" step="1" onchange="state.config.distTol=parseFloat(this.value)||0; render(); save();">
+      </div>
     </div>
 
     <div class="lcard">
@@ -696,9 +705,9 @@ const FOODS = [
    micro:{fib:0,    fe:0.9,   ca:21,   mg:6,    zn:0.55,  k:65,   va:90,  vc:0,    b12:0.45, fol:24}},
   {id:'pao',      name:'Pão de forma integral', unit:'fatia', buyUnit:'pacote (20 fatias)', factor:20,   kcal:65,   prot:3.0,
    micro:{fib:1.7,  fe:0.7,   ca:25,   mg:20,   zn:0.45,  k:60,   va:0,   vc:0,    b12:0,    fol:10}},
-  {id:'banana',   name:'Banana',                unit:'un',    buyUnit:'un',                 factor:1,    kcal:90,   prot:1.1,
+  {id:'banana',   name:'Banana',                unit:'un',    buyUnit:'kg',                 factor:8.3,  kcal:90,   prot:1.1,
    micro:{fib:2.3,  fe:0.23,  ca:5,    mg:24,   zn:0.13,  k:320,  va:3,   vc:8,    b12:0,    fol:18}},
-  {id:'maca',     name:'Maçã',                  unit:'un',    buyUnit:'un',                 factor:1,    kcal:60,   prot:0.3,
+  {id:'maca',     name:'Maçã',                  unit:'un',    buyUnit:'kg',                 factor:7.7,  kcal:60,   prot:0.3,
    micro:{fib:2.4,  fe:0.1,   ca:4,    mg:5,    zn:0.04,  k:100,  va:3,   vc:4.6,  b12:0,    fol:3}},
   {id:'aveia',    name:'Aveia',                 unit:'g',     buyUnit:'kg',                 factor:1000, kcal:3.94, prot:0.139,
    micro:{fib:0.091,fe:0.0044,ca:0.48, mg:1.19, zn:0.026, k:3.36, va:0,   vc:0,    b12:0,    fol:0.32}},
@@ -808,7 +817,7 @@ const BASE_ROWS = [
   {key:'aj_azeite',     meal:'Almoço + janta',foodId:'azeite',   qty:5,   times:c=>c.almocoFreq+c.jantaFreq, timesLabel:c=>(c.almocoFreq+c.jantaFreq)+'×/sem'},
   {key:'aj_vegetais',   meal:'Almoço + janta',foodId:'vegetais', qty:150, times:c=>c.almocoFreq+c.jantaFreq, timesLabel:c=>(c.almocoFreq+c.jantaFreq)+'×/sem'},
 ];
-const DEFAULT_CONFIG = {cafeFreq:7, almocoFreq:3, jantaFreq:7, lancheFreq:7, fracFrango:60, weeksMonth:4.35};
+const DEFAULT_CONFIG = {cafeFreq:7, almocoFreq:3, jantaFreq:7, lancheFreq:7, fracFrango:60, weeksMonth:4.35, distTol:5};
 
 let state = {
   config:{...DEFAULT_CONFIG},
@@ -963,13 +972,25 @@ function storeTotal(storeId, weekly){
   let t=0; allFoods().forEach(f=>{ t += priceOf(storeId,f.id)*monthlyBuyQty(f.id,weekly); });
   return t;
 }
+function anyPrice(fid){ return state.stores.some(s=>priceOf(s.id,fid)>0); }
+function fmtDist(s){
+  if(!s||s.dist==null||!(s.dist>0)) return '';
+  const d=s.dist>=1000? (s.dist/1000).toFixed(1).replace('.',',')+' km' : s.dist+' m';
+  return d+(s.min?' · '+s.min+' min':'');
+}
 function bestPrice(foodId){
-  let best=null;
+  const opts=[];
   state.stores.forEach(s=>{
     const p=priceOf(s.id,foodId);
-    if(p>0&&(!best||p<best.price)) best={price:p,storeId:s.id};
+    if(p>0) opts.push({price:p, storeId:s.id, dist:(s.dist!=null&&s.dist>0)?s.dist:Infinity});
   });
-  return best;
+  if(!opts.length) return null;
+  const min=Math.min(...opts.map(o=>o.price));
+  const tol=1+((state.config.distTol!=null?state.config.distTol:5)/100);
+  const near=opts.filter(o=>o.price<=min*tol);
+  near.sort((a,b)=>(a.dist-b.dist)||(a.price-b.price));
+  const pick=near[0]||opts[0];
+  return {price:pick.price, storeId:pick.storeId, minPrice:min, byDist:pick.price>min};
 }
 
 /* ==================== RENDER: DIETA ==================== */
@@ -978,6 +999,7 @@ function renderConfig(){
   $('fracFrango').value = state.config.fracFrango;
   $('v_fracFrango').textContent = state.config.fracFrango+'% frango';
   $('weeksMonth').value = state.config.weeksMonth;
+  if($('g_tol')&&document.activeElement!==$('g_tol')) $('g_tol').value = state.config.distTol!=null?state.config.distTol:5;
   $('g_weight').value = state.goals.weightKg||'';
   $('g_ppk').value = state.goals.protPerKg||'';
   $('g_kcal').value = state.goals.kcalGoal||'';
@@ -1250,11 +1272,16 @@ function renderList(){
       (groups[bp.storeId]=groups[bp.storeId]||[]).push({...it, price:bp.price});
     });
     let html='';
+    let totMin=0, nVisit=0;
+    state.stores.forEach(s=>{ if(groups[s.id]&&groups[s.id].length){ nVisit++; if(s.min) totMin+=s.min; } });
+    if(nVisit>1&&totMin>0){
+      html+=`<div class="cardnote" style="padding:10px 20px 0;">Roteiro passa por ${nVisit} mercados · ~${totMin} min de caminhada (só as idas).</div>`;
+    }
     state.stores.forEach(s=>{
       const g=groups[s.id]; if(!g||!g.length) return;
       const sub=g.reduce((a,it)=>a+it.price*it.buy,0);
       html+=`<div class="cardtitle" style="padding-top:14px; display:flex; justify-content:space-between;">
-        <span>📍 ${esc(s.name)}</span><span style="text-transform:none; letter-spacing:0;">${fmtMoney(sub)}</span></div>`;
+        <span>📍 ${esc(s.name)}${fmtDist(s)?' <span style="text-transform:none; letter-spacing:0; font-weight:600; color:var(--ink2);">· '+fmtDist(s)+'</span>':''}</span><span style="text-transform:none; letter-spacing:0;">${fmtMoney(sub)}</span></div>`;
       g.forEach(it=>{
         const on=!!state.checked[it.f.id];
         html+=`
@@ -1325,6 +1352,30 @@ function addStore(){
   render(); save();
   toast(name+' adicionado');
 }
+function openStoreEdit(id){
+  const s=state.stores.find(x=>x.id===id); if(!s) return;
+  openSheet(`
+    <h3>Editar mercado</h3>
+    <div class="formgrid">
+      <label>Nome</label>
+      <input class="field" id="se_name" value="${esc(s.name)}">
+      <div class="f2">
+        <div><label>Distância (metros)</label><input class="field" id="se_dist" type="number" min="0" step="50" value="${s.dist||''}" placeholder="ex: 600"></div>
+        <div><label>Tempo a pé (min)</label><input class="field" id="se_min" type="number" min="0" value="${s.min||''}" placeholder="ex: 7"></div>
+      </div>
+    </div>
+    <div class="cardnote" style="padding:6px 0 10px;">Com as distâncias preenchidas, quando a diferença de preço entre mercados for pequena (tolerância nos Ajustes), o app passa a indicar o mais próximo na cesta mista, no roteiro e nas melhores compras.</div>
+    <button class="btn tint block" onclick="saveStoreEdit('${s.id}')">Salvar</button>
+  `);
+}
+function saveStoreEdit(id){
+  const s=state.stores.find(x=>x.id===id); if(!s) return;
+  s.name=($('se_name').value||s.name).trim()||s.name;
+  s.dist=parseFloat($('se_dist').value)||null;
+  s.min=parseFloat($('se_min').value)||null;
+  closeSheet(); render(); save();
+  toast('Mercado atualizado ✓');
+}
 function removeStore(id){
   const s=state.stores.find(x=>x.id===id);
   if(!confirm('Remover '+(s?s.name:'este mercado')+' e seus preços?')) return;
@@ -1363,7 +1414,8 @@ function renderStores(){
     const cheapest=total>0&&total===minTotal&&state.stores.length>1;
     let rows='';
     allFoods().forEach(f=>{
-      if(monthlyBuyQty(f.id,weekly)<=0) return;
+      const inDiet=monthlyBuyQty(f.id,weekly)>0;
+      if(!inDiet && !anyPrice(f.id)) return;
       const p=priceOf(s.id,f.id);
       const e=state.prices[s.id]&&state.prices[s.id][f.id];
       const bp=bestPrice(f.id);
@@ -1383,7 +1435,7 @@ function renderStores(){
     html+=`
       <div class="lcard" ${cheapest?'style="border-color:var(--tint); box-shadow:0 0 0 1.5px var(--tint), var(--shadow);"':''}>
         <div class="storehead">
-          <div class="sname">${esc(s.name)}</div>
+          <div class="sname" style="cursor:pointer;" onclick="openStoreEdit('${s.id}')">${esc(s.name)}${fmtDist(s)?' <span class="pill" style="background:var(--fill); color:var(--ink2);">'+fmtDist(s)+'</span>':' <span class="pill" style="background:var(--fill); color:var(--ink3);">+ distância</span>'}</div>
           ${cheapest?'<span class="pill green">mais barato</span>':''}
           <button class="iconbtn" onclick="removeStore('${s.id}')">✕</button>
         </div>
@@ -1392,6 +1444,69 @@ function renderStores(){
       </div>`;
   });
   wrap.innerHTML=html;
+}
+function renderDeals(){
+  const wrap=$('dealsWrap'); if(!wrap) return;
+  wrap.innerHTML='';
+  const foods=allFoods().filter(f=>anyPrice(f.id));
+  if(!foods.length||state.stores.length<1) return;
+  const weekly=computeWeekly();
+  const rows=foods.map(f=>{
+    const ps=state.stores.map(s=>({s, p:priceOf(s.id,f.id)})).filter(x=>x.p>0);
+    ps.sort((a,b)=>a.p-b.p);
+    const worst=ps[ps.length-1];
+    const bp=bestPrice(f.id);
+    const best=ps.find(x=>x.s.id===bp.storeId)||ps[0];
+    const pct=ps.length>1? (worst.p-bp.minPrice)/worst.p*100 : 0;
+    return {f, best, worst, n:ps.length, pct, byDist:bp.byDist, inDiet:monthlyBuyQty(f.id,weekly)>0};
+  });
+  rows.sort((a,b)=>b.pct-a.pct || a.f.name.localeCompare(b.f.name));
+  let html='';
+  rows.forEach(r=>{
+    const norm=normPrice(r.f, r.best.p);
+    html+=`
+      <div class="row">
+        <div class="grow">
+          <div class="rtitle">${esc(trunc(r.f.name,24))}${r.inDiet?'':' <span class="pill" style="background:var(--fill); color:var(--ink2);">fora da dieta</span>'}</div>
+          <div class="rsub">${r.n>1
+            ? `<b style="color:var(--tint-text)">${esc(r.best.s.name)}</b>${fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':''} · ${r.byDist? 'quase empate — vence por ser mais perto' : (r.pct>=1? r.pct.toFixed(0)+'% mais barato que '+esc(trunc(r.worst.s.name,16)) : 'empate entre mercados')}`
+            : 'só em '+esc(r.best.s.name)+(fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':'')}</div>
+        </div>
+        <div class="buyqty">${fmtMoney(r.best.p)}<small class="normtag">${norm||('/'+esc(r.f.buyUnit))}</small></div>
+      </div>`;
+  });
+  /* receitas por custo, usando melhores preços */
+  let recHtml='';
+  const recs=RECIPES.map(r=>{
+    let cost=0, ok=true;
+    r.ing.forEach(i=>{
+      const f=food(i.fid), bp=bestPrice(i.fid);
+      if(!f||!bp){ ok=false; return; }
+      cost+=bp.price/f.factor*(i.q||i.qty||0);
+    });
+    if(!ok) return null;
+    const n=mealNutrients(r.ing.map(i=>({fid:i.fid, qty:i.q||i.qty})));
+    return {r, cost, prot:n.prot};
+  }).filter(Boolean).sort((a,b)=>a.cost-b.cost);
+  recs.slice(0,8).forEach(x=>{
+    recHtml+=`
+      <div class="row" style="cursor:pointer;" onclick="openRecipe('${x.r.id}')">
+        <div class="grow"><div class="rtitle">${esc(x.r.name)}</div>
+        <div class="rsub">${x.prot>0? fmtMoney(x.cost/x.prot)+' por g de proteína':'—'}</div></div>
+        <div class="buyqty">${fmtMoney(x.cost)}<small>por porção</small></div>
+      </div>`;
+  });
+  wrap.innerHTML=`
+    <div class="lcard">
+      <div class="cardtitle">💡 O que compensa — melhores compras</div>
+      ${html}
+      <div class="cardnote">Ordenado pela maior diferença entre mercados. Produtos "fora da dieta" não entram nos totais — servem só de radar de preço.</div>
+    </div>
+    ${recHtml?`<div class="lcard">
+      <div class="cardtitle">👨‍🍳 O que compensa fazer — receitas por custo</div>
+      ${recHtml}
+      <div class="cardnote">Custo por porção usando o melhor preço de cada ingrediente entre seus mercados.</div>
+    </div>`:''}`;
 }
 function renderMixed(){
   const wrap=$('mixedWrap');
@@ -1833,7 +1948,7 @@ function recipeStatus(r){
 function renderRecipes(){
   const pc=$('pantryChips'), uc=$('utensilChips'), list=$('recipesList');
   if(!pc) return;
-  pc.innerHTML=allFoods().map(f=>
+  pc.innerHTML=allFoods().filter(f=>!f.track).map(f=>
     `<button class="ingchip ${pantryHas(f.id)?'on':''}" onclick="togglePantry('${f.id}')">${esc(trunc(f.name,18))}</button>`).join('');
   uc.innerHTML=UTENSILS.map(u=>
     `<button class="ingchip ${state.utensils[u.id]?'on':''}" onclick="toggleUtensil('${u.id}')">${esc(u.name)}</button>`).join('');
@@ -2843,13 +2958,15 @@ function analyzePaste(){
     g.items.forEach((it,ii)=>{
       const guess=guessFood(it);
       it.sugg=suggPrice(it, guess);
-      const foodOpts='<option value="">— ignorar</option>'+allFoods().map(f=>`<option value="${f.id}" ${guess===f.id?'selected':''}>${esc(f.name)}</option>`).join('');
+      const foodOpts='<option value="">— ignorar</option>'
+        +`<option value="__track__" ${!guess?'selected':''}>📊 registrar como novo produto</option>`
+        +allFoods().map(f=>`<option value="${f.id}" ${guess===f.id?'selected':''}>${esc(f.name)}</option>`).join('');
       html+=`
         <div style="border-bottom:.5px solid var(--sep); padding:8px 0;">
           <div style="font-size:13px; font-weight:700;">${esc(trunc(it.desc,40))} <span style="color:var(--ink2); font-weight:500;">· anotado ${fmtMoney(it.price)}</span></div>
           <div class="f2" style="margin-top:6px;">
             <select class="field" id="pi_f_${gi}_${ii}" onchange="updatePasteRow(${gi},${ii},this.value)">${foodOpts}</select>
-            <input class="field" id="pi_p_${gi}_${ii}" type="number" step="0.01" value="${guess?it.sugg.toFixed(2):''}" placeholder="preço na unid. de compra">
+            <input class="field" id="pi_p_${gi}_${ii}" type="number" step="0.01" value="${guess?it.sugg.toFixed(2):it.price.toFixed(2)}" placeholder="preço na unid. de compra">
           </div>
           ${guess&&Math.abs(it.sugg-it.price)>0.01?`<div class="cardnote" style="padding:4px 0 0;" id="pi_n_${gi}_${ii}">convertido para a unidade de compra do item (${esc(food(guess).buyUnit)})</div>`:`<div id="pi_n_${gi}_${ii}"></div>`}
         </div>`;
@@ -2868,6 +2985,7 @@ function updatePasteRow(gi, ii, fid){
   const p=$('pi_p_'+gi+'_'+ii);
   const note=$('pi_n_'+gi+'_'+ii);
   if(!fid){ p.value=''; if(note) note.textContent=''; return; }
+  if(fid==='__track__'){ p.value=it.price.toFixed(2); if(note) note.textContent='novo produto — preço pela embalagem anotada'; return; }
   const s=suggPrice(it, fid);
   p.value=s.toFixed(2);
   if(note) note.textContent = Math.abs(s-it.price)>0.01 ? 'convertido para a unidade de compra do item ('+food(fid).buyUnit+')' : '';
@@ -2888,9 +3006,21 @@ function applyPaste(){
       }
     }
     g.items.forEach((it,ii)=>{
-      const fid=($('pi_f_'+gi+'_'+ii)||{value:''}).value;
+      let fid=($('pi_f_'+gi+'_'+ii)||{value:''}).value;
       const p=parseFloat(($('pi_p_'+gi+'_'+ii)||{value:0}).value)||0;
       if(!fid||p<=0) return;
+      if(fid==='__track__'){
+        const nm=trunc(it.desc.replace(/\s+(kg|un|maço)(\s+(kg|un|maço))*\s*$/i,'').trim()||it.desc,26);
+        const existing=allFoods().find(f=>normTxt(f.name)===normTxt(nm));
+        if(existing) fid=existing.id;
+        else{
+          const nf={id:'tf_'+Date.now()+'_'+gi+'_'+ii, name:nm, kcal:0, prot:0, track:true};
+          if(it.size&&it.size.g){ nf.unit='g'; nf.factor=it.size.g; nf.buyUnit=it.size.g>=1000?(it.size.g/1000)+' kg':it.size.g+' g'; }
+          else if(it.size&&it.size.un){ nf.unit='un'; nf.factor=it.size.un; nf.buyUnit=it.size.un+' un'; }
+          else{ nf.unit='un'; nf.factor=1; nf.buyUnit='un'; }
+          state.customFoods.push(nf);
+        }
+      }
       if(!state.prices[storeId]) state.prices[storeId]={};
       const e=state.prices[storeId][fid]||{p:0,h:[]};
       /* mesmo alimento repetido no grupo (ex: 2 marcas): fica o mais barato */
@@ -2954,11 +3084,14 @@ function guessFood(item){
     }
   }
   const d=normTxt(item.desc);
+  const dFirst=d.split(/\s+/)[0];
   let best=null, bestScore=0;
   allFoods().forEach(f=>{
     let score=0;
     [f.name].concat(variantsOf(f.id).map(v=>v.label)).forEach(nm=>{
-      normTxt(nm).split(/\s+/).forEach(tok=>{ if(tok.length>=4&&d.includes(tok)) score++; });
+      const toks=normTxt(nm).split(/\s+/);
+      toks.forEach(tok=>{ if(tok.length>=4&&d.includes(tok)) score++; });
+      if(f.track&&toks[0]&&toks[0].length>=4&&toks[0]===dFirst) score++;
     });
     (FOOD_KW[f.id]||[]).forEach(kw=>{ if(d.includes(kw)) score+=2; });
     if(score>bestScore){ bestScore=score; best=f.id; }
@@ -3187,6 +3320,7 @@ function render(){
   renderNutriBalance();
   renderList();
   renderMixed();
+  renderDeals();
   renderStores();
 }
 
