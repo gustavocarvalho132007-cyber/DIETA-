@@ -279,6 +279,16 @@ input[type=range]{width:100%; accent-color:var(--tint); height:30px;}
 .histrow span:first-child{color:var(--ink2);}
 
 /* ============ TOAST ============ */
+.verstamp{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(84px + env(safe-area-inset-bottom));
+  font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:10px; font-weight:600;
+  color:var(--ink2); background:var(--card);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+  border:1px solid var(--glass-border); border-radius:999px; padding:4px 11px;
+  z-index:40; opacity:0; pointer-events:none; transition:opacity .5s;
+}
+.verstamp.show{opacity:.9;}
 .toast{
   position:fixed; top:calc(14px + env(safe-area-inset-top)); left:50%; transform:translate(-50%,-160%);
   background:var(--card-strong); -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
@@ -664,7 +674,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
         <div class="grow"><div class="rtitle" style="color:var(--red);">Apagar tudo e recomeçar</div></div>
       </div>
     </div>
-    <div class="empty" style="padding-top:6px;">Dieta · planeje, compare e economize<br>v3 · iOS-style</div>
+    <div class="empty" style="padding-top:6px;">Dieta · planeje, compare e economize<br><span id="verFooter"></span></div>
   </section>
 </main>
 
@@ -696,10 +706,13 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <div class="sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet"><div class="grab"></div><div id="sheetContent"></div></div>
 <div class="toast" id="toast"></div>
+<div class="verstamp" id="verstamp"></div>
 
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
+const APP_VERSION='4.0';
+const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
    micro:{fib:0,    fe:0.9,   ca:21,   mg:6,    zn:0.55,  k:65,   va:90,  vc:0,    b12:0.45, fol:24}},
@@ -2900,12 +2913,13 @@ function suggPrice(item, fid){
   if(!f) return item.price;
   if(!item.size){
     /* frutas sem tamanho anotado: hortifruti vende por kg */
-    if((fid==='banana'||fid==='maca') && f.unit==='un' && UNIT_G[fid])
-      return +(item.price*f.factor*UNIT_G[fid]/1000).toFixed(2);
+    if((fid==='banana'||fid==='maca') && f.unit==='un')
+      return /\bkg\b/i.test(f.buyUnit) ? item.price : +(item.price*f.factor*(UNIT_G[fid]||120)/1000).toFixed(2);
     return item.price;
   }
   let neededG=null;
   if(f.unit==='g') neededG=f.factor;
+  else if(/\bkg\b/i.test(f.buyUnit)) neededG=1000*(parseFloat(f.buyUnit)||1);
   else if(UNIT_G[fid]) neededG=f.factor*UNIT_G[fid];
   if(item.size.un&&f.unit!=='g') return +(item.price*f.factor/item.size.un).toFixed(2);
   if(item.size.g&&neededG) return +(item.price*neededG/item.size.g).toFixed(2);
@@ -3327,6 +3341,7 @@ function render(){
 /* init */
 localLoad();
 syncFreqFromDays();
+document.getElementById('verFooter').textContent='v'+APP_VERSION+' · build '+APP_BUILD;
 applyTheme();
 render();
 goTab(ui.tab||'dieta');
@@ -3343,6 +3358,13 @@ if(window._pairOnLoad){
   const p=window._pairOnLoad; window._pairOnLoad=null;
   setTimeout(()=>{ goTab('ajustes'); applyPairPayload(p); }, 400);
 }
+/* selinho de versão ao abrir */
+(function(){
+  const v=$('verstamp');
+  v.textContent='Dieta v'+APP_VERSION+' · '+APP_BUILD.split('-').reverse().slice(0,2).join('/');
+  setTimeout(()=>v.classList.add('show'), 300);
+  setTimeout(()=>v.classList.remove('show'), 3800);
+})();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
