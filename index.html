@@ -547,8 +547,8 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
       <button class="btn soft block" onclick="openNfceImport()">📄 Importar nota fiscal (QR do cupom)</button>
       <button class="btn soft block" style="margin-top:8px;" onclick="openPasteImport()">📝 Colar lista de preços (texto)</button>
     </div>
-    <div id="mixedWrap"></div>
     <div id="dealsWrap"></div>
+    <div id="mixedWrap"></div>
     <div id="storesWrap"></div>
     <div class="lcard cardnote" style="padding:14px 20px;">
       Preencha o preço pela <b>unidade de compra</b> (kg do arroz, dúzia de ovos…). Toque no nome do item para ver o histórico completo. ▲ subiu · ▼ caiu desde a última atualização. Fundo verde = mais barato entre os mercados.
@@ -711,7 +711,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
-const APP_VERSION='4.1';
+const APP_VERSION='4.3';
 const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
@@ -928,6 +928,7 @@ function migrate(s){
   Object.keys(s.prices||{}).forEach(sid=>{
     out.prices[sid]={};
     Object.keys(s.prices[sid]||{}).forEach(fid=>{
+      if(fid==='__track__') return;   /* limpa órfãos de versão com bug */
       const v=s.prices[sid][fid];
       if(typeof v==='number') out.prices[sid][fid]={p:v,h:[{d:todayISO(),p:v}]};
       else if(v&&typeof v==='object') out.prices[sid][fid]={p:v.p||0,h:Array.isArray(v.h)?v.h:[]};
@@ -1421,15 +1422,18 @@ function renderStores(){
   const totals=state.stores.map(s=>({id:s.id,total:storeTotal(s.id,weekly)}));
   const positive=totals.map(t=>t.total).filter(t=>t>0);
   const minTotal=positive.length?Math.min(...positive):0;
+  window._openStores=window._openStores||{};
   let html='';
   state.stores.forEach(s=>{
     const total=storeTotal(s.id,weekly);
     const cheapest=total>0&&total===minTotal&&state.stores.length>1;
-    let rows='';
+    const expanded=!!window._openStores[s.id];
+    let rows='', hidden=0;
     allFoods().forEach(f=>{
       const inDiet=monthlyBuyQty(f.id,weekly)>0;
       if(!inDiet && !anyPrice(f.id)) return;
       const p=priceOf(s.id,f.id);
+      if(!(p>0) && !expanded){ hidden++; return; }
       const e=state.prices[s.id]&&state.prices[s.id][f.id];
       const bp=bestPrice(f.id);
       const best=bp&&bp.storeId===s.id&&state.stores.length>1;
@@ -1452,7 +1456,12 @@ function renderStores(){
           ${cheapest?'<span class="pill green">mais barato</span>':''}
           <button class="iconbtn" onclick="removeStore('${s.id}')">✕</button>
         </div>
-        ${rows}
+        ${rows||'<div class="empty" style="padding:14px;">Nenhum preço registrado ainda.</div>'}
+        <div style="padding:8px 16px 0;">
+          <button class="btn plain compact" onclick="window._openStores['${s.id}']=${expanded?'false':'true'}; renderStores();">
+            ${expanded?'ocultar itens sem preço':'＋ preencher preços ('+hidden+' sem preço)'}
+          </button>
+        </div>
         <div class="pricetotal"><span>Total da dieta / mês</span><span>${fmtMoney(total)}</span></div>
       </div>`;
   });
@@ -1473,14 +1482,19 @@ function renderDeals(){
     const pct=ps.length>1? (worst.p-bp.minPrice)/worst.p*100 : 0;
     return {f, best, worst, n:ps.length, pct, byDist:bp.byDist, inDiet:monthlyBuyQty(f.id,weekly)>0};
   });
-  rows.sort((a,b)=>b.pct-a.pct || a.f.name.localeCompare(b.f.name));
-  let html='';
+  rows.sort((a,b)=>(b.inDiet-a.inDiet) || b.pct-a.pct || a.f.name.localeCompare(b.f.name));
+  let html='', radarStarted=false;
   rows.forEach(r=>{
+    if(!r.inDiet&&!radarStarted){
+      radarStarted=true;
+      html+='<div class="cardtitle" style="padding-top:16px;">📡 Radar — fora da dieta</div>';
+    }
     const norm=normPrice(r.f, r.best.p);
+    const nv=variantsOf(r.f.id).length;
     html+=`
-      <div class="row">
+      <div class="row" style="cursor:pointer;" onclick="openAssoc('${r.f.id}')">
         <div class="grow">
-          <div class="rtitle">${esc(trunc(r.f.name,24))}${r.inDiet?'':' <span class="pill" style="background:var(--fill); color:var(--ink2);">fora da dieta</span>'}</div>
+          <div class="rtitle">${esc(trunc(r.f.name,24))}${nv?` <span class="pill softgreen">${nv} marca${nv>1?'s':''} ▾</span>`:''}</div>
           <div class="rsub">${r.n>1
             ? `<b style="color:var(--tint-text)">${esc(r.best.s.name)}</b>${fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':''} · ${r.byDist? 'quase empate — vence por ser mais perto' : (r.pct>=1? r.pct.toFixed(0)+'% mais barato que '+esc(trunc(r.worst.s.name,16)) : 'empate entre mercados')}`
             : 'só em '+esc(r.best.s.name)+(fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':'')}</div>
@@ -1536,8 +1550,11 @@ function renderMixed(){
     perStore[bp.storeId]=(perStore[bp.storeId]||0)+bp.price*q;
   });
   if(!any) return;
-  const totals=state.stores.map(s=>storeTotal(s.id,weekly)).filter(t=>t>0);
-  const bestSingle=totals.length?Math.min(...totals):0;
+  const dietFoods=allFoods().filter(f=>monthlyBuyQty(f.id,weekly)>0 && bestPrice(f.id));
+  const completeTotals=state.stores
+    .filter(s=>dietFoods.every(f=>priceOf(s.id,f.id)>0))
+    .map(s=>storeTotal(s.id,weekly)).filter(t=>t>0);
+  const bestSingle=completeTotals.length?Math.min(...completeTotals):0;
   const savings=bestSingle-mixed;
   const chips=state.stores.filter(s=>perStore[s.id]).map(s=>
     `<span class="pill softgreen">${esc(s.name)}: ${fmtMoney(perStore[s.id])}</span>`).join(' ');
@@ -1546,7 +1563,7 @@ function renderMixed(){
       <div class="cardtitle">Cesta mista — cada item onde é mais barato${all?'':' (parcial)'}</div>
       <div class="mixhead">
         <div class="m"><div class="tl">Cesta mista/mês</div><div class="tv">${fmtMoney(mixed)}</div></div>
-        <div class="m"><div class="tl">Melhor mercado único</div><div class="tv">${bestSingle?fmtMoney(bestSingle):'—'}</div></div>
+        <div class="m"><div class="tl">Melhor mercado único</div><div class="tv">${bestSingle?fmtMoney(bestSingle):'—'}</div>${bestSingle?'':'<div class="tl" style="text-transform:none;">nenhum mercado tem todos os itens</div>'}</div>
         <div class="m"><div class="tl">Economia</div><div class="tv save">${bestSingle&&savings>0?fmtMoney(savings)+' (−'+(savings/bestSingle*100).toFixed(0)+'%)':'—'}</div></div>
       </div>
       <div style="display:flex; gap:6px; flex-wrap:wrap; padding:8px 20px 16px;">${chips}</div>
@@ -2628,17 +2645,62 @@ function openScanner(target){
     </div>`);
   startScan();
 }
+let scanStream=null, scanTimer=null;
 async function startScan(){
+  const st=$('scanStatus');
+  /* 1ª opção: leitor NATIVO do navegador (Chrome/Android) — muito melhor para EAN pequeno */
+  try{
+    if('BarcodeDetector' in window && navigator.mediaDevices){
+      const formats=await BarcodeDetector.getSupportedFormats();
+      const want=scanMode==='ean'
+        ? ['ean_13','ean_8','upc_a','upc_e','code_128']
+        : ['qr_code'];
+      const use=want.filter(f=>formats.includes(f));
+      if(use.length){
+        const det=new BarcodeDetector({formats:use});
+        scanStream=await navigator.mediaDevices.getUserMedia({
+          video:{facingMode:'environment', width:{ideal:1920}, height:{ideal:1080}}
+        });
+        const v=document.createElement('video');
+        v.setAttribute('playsinline',''); v.autoplay=true; v.muted=true;
+        v.style.cssText='width:100%; border-radius:16px; display:block;';
+        const reader=$('scanReader');
+        if(reader){ reader.innerHTML=''; reader.appendChild(v); }
+        v.srcObject=scanStream;
+        await v.play();
+        try{
+          const track=scanStream.getVideoTracks()[0];
+          const caps=track.getCapabilities?track.getCapabilities():{};
+          if(caps.focusMode&&caps.focusMode.includes('continuous'))
+            await track.applyConstraints({advanced:[{focusMode:'continuous'}]});
+        }catch(e){}
+        if(st) st.textContent='câmera ativa (leitor nativo) — centralize o código';
+        const loop=async()=>{
+          if(!scanStream) return;
+          try{
+            const codes=await det.detect(v);
+            if(codes&&codes.length&&codes[0].rawValue){ onBarcode(codes[0].rawValue); return; }
+          }catch(e){}
+          scanTimer=setTimeout(loop,160);
+        };
+        loop();
+        return;
+      }
+    }
+  }catch(e){ await stopScan(); }
+  /* 2ª opção: biblioteca (Safari/iPhone e afins) */
   try{
     if(!window.Html5Qrcode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js');
     scanner=new Html5Qrcode('scanReader');
     await scanner.start({facingMode:'environment'},{fps:10, qrbox:{width:260,height:140}}, code=>onBarcode(code));
-    const st=$('scanStatus'); if(st) st.textContent='câmera ativa — aproxime o código de barras';
+    if(st) st.textContent='câmera ativa — aproxime o código de barras';
   }catch(e){
-    const st=$('scanStatus'); if(st) st.textContent='câmera indisponível — digite o código manualmente';
+    if(st) st.textContent='câmera indisponível — digite o código manualmente';
   }
 }
 async function stopScan(){
+  clearTimeout(scanTimer); scanTimer=null;
+  if(scanStream){ try{ scanStream.getTracks().forEach(t=>t.stop()); }catch(e){} scanStream=null; }
   if(scanner){ try{ await scanner.stop(); scanner.clear(); }catch(e){} scanner=null; }
 }
 function manualLookup(){
@@ -3028,14 +3090,23 @@ function applyPaste(){
       if(!fid||p<=0) return;
       if(fid==='__track__'){
         const nm=trunc(it.desc.replace(/\s+(kg|un|maço)(\s+(kg|un|maço))*\s*$/i,'').trim()||it.desc,26);
-        const existing=allFoods().find(f=>normTxt(f.name)===normTxt(nm));
+        let existing=allFoods().find(f=>normTxt(f.name)===normTxt(nm));
+        if(!existing){
+          const g2=guessFood({desc:it.desc});
+          const gf=g2&&food(g2);
+          if(gf&&gf.track) existing=gf;
+        }
         if(existing) fid=existing.id;
         else{
           const nf={id:'tf_'+Date.now()+'_'+gi+'_'+ii, name:nm, kcal:0, prot:0, track:true};
           if(it.size&&it.size.g){ nf.unit='g'; nf.factor=it.size.g; nf.buyUnit=it.size.g>=1000?(it.size.g/1000)+' kg':it.size.g+' g'; }
           else if(it.size&&it.size.un){ nf.unit='un'; nf.factor=it.size.un; nf.buyUnit=it.size.un+' un'; }
+          else if(/\b(cebola|batata|tomate|beterraba|mexerica|repolho|abobrinha|abobora|chuchu|pepino|laranja|limao|mamao|melancia|manga|uva|pera)\b/i.test(normTxt(nm))){
+            nf.unit='g'; nf.factor=1000; nf.buyUnit='1 kg';   /* hortifruti sem tamanho: assume kg */
+          }
           else{ nf.unit='un'; nf.factor=1; nf.buyUnit='un'; }
           state.customFoods.push(nf);
+          fid=nf.id;
         }
       }
       if(!state.prices[storeId]) state.prices[storeId]={};
@@ -3050,6 +3121,24 @@ function applyPaste(){
       if(!window._pasteSet) window._pasteSet={};
       window._pasteSet[storeId+'_'+fid]=true;
       count++; storesUsed.add(storeId);
+      /* marca/embalagem diferente do nome do item → vira variante (expandível no item) */
+      const ff=food(fid);
+      if(ff && normTxt(it.desc)!==normTxt(ff.name)){
+        if(!state.variants[fid]) state.variants[fid]=[];
+        const label=trunc(it.desc,30);
+        let v=state.variants[fid].find(x=>normTxt(x.label)===normTxt(label)&&x.storeId===storeId);
+        if(v){ v.price=it.price; v.d=todayISO(); }
+        else{
+          const qg=it.size&&it.size.g?it.size.g:null;
+          const qu=it.size&&it.size.un?it.size.un:null;
+          state.variants[fid].push({
+            id:'v_'+Date.now()+'_'+gi+'_'+ii, code:null, label,
+            qty: ff.unit==='g'?(qg||1000):(qu||ff.factor),
+            qtyLabel: qg?fmtQty({unit:'g'},qg):(qu?qu+' un':ff.buyUnit),
+            price:it.price, storeId, d:todayISO(), kcal100:0, prot100:0
+          });
+        }
+      }
     });
   });
   window._paste=null; window._pasteSet=null;
