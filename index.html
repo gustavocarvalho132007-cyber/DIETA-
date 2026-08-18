@@ -548,6 +548,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
       <button class="btn soft block" style="margin-top:8px;" onclick="openPasteImport()">📝 Colar lista de preços (texto)</button>
     </div>
     <div id="dealsWrap"></div>
+    <div id="costWrap"></div>
     <div id="mixedWrap"></div>
     <div id="storesWrap"></div>
     <div class="lcard cardnote" style="padding:14px 20px;">
@@ -711,7 +712,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
-const APP_VERSION='4.5';
+const APP_VERSION='4.7';
 const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
@@ -732,8 +733,8 @@ const FOODS = [
    micro:{fib:0,    fe:0,     ca:0,    mg:0,    zn:0,     k:0,    va:0,   vc:0,    b12:0,    fol:0}},
   {id:'vegetais', name:'Vegetais (mix)',        unit:'g',     buyUnit:'kg',                 factor:1000, kcal:0.35, prot:0.025,
    micro:{fib:0.028,fe:0.006, ca:0.45, mg:0.15, zn:0.004, k:2.9,  va:2.4, vc:0.55, b12:0,    fol:0.5}},
-  {id:'iogurte',  name:'Iogurte',               unit:'un',    buyUnit:'pote 170 g',         factor:1,    kcal:100,  prot:6.0,
-   micro:{fib:0,    fe:0.1,   ca:245,  mg:20,   zn:1.0,   k:260,  va:40,  vc:1,    b12:0.6,  fol:12}},
+  {id:'iogurte',  name:'Iogurte',               unit:'g',     buyUnit:'pote 480 g',         factor:480,  kcal:0.6,  prot:0.038,
+   micro:{fib:0,    fe:0.0005,ca:1.21, mg:0.12, zn:0.006, k:1.55, va:0.27,vc:0.005,b12:0.0037,fol:0.07}},
   {id:'leitepo',  name:'Leite em pó',           unit:'g',     buyUnit:'kg',                 factor:1000, kcal:4.97, prot:0.263,
    micro:{fib:0,    fe:0.005, ca:9.12, mg:0.85, zn:0.033, k:13.2, va:2.58,vc:0.05, b12:0.03, fol:0.05}},
   {id:'arroz',    name:'Arroz',                 unit:'g',     buyUnit:'kg',                 factor:1000, kcal:3.60, prot:0.072,
@@ -768,7 +769,7 @@ const RECIPES=[
    ing:[{fid:'banana',q:1},{fid:'ovo',q:2},{fid:'aveia',q:40}], extra:'canela (opcional)',
    steps:'Amasse a banana, misture os ovos e a aveia até virar massa. Despeje porções na frigideira antiaderente em fogo baixo e doure ~2 min de cada lado.'},
   {id:'overnight', name:'Aveia de pote (overnight oats)', time:'5 min + geladeira', ut:[],
-   ing:[{fid:'aveia',q:50},{fid:'iogurte',q:1},{fid:'banana',q:1}], extra:'mel/canela (opcional)',
+   ing:[{fid:'aveia',q:50},{fid:'iogurte',q:160},{fid:'banana',q:1}], extra:'mel/canela (opcional)',
    steps:'Misture aveia e iogurte num pote, cubra e deixe na geladeira de um dia pro outro. Sirva com banana em rodelas por cima.'},
   {id:'mingau', name:'Mingau de aveia com banana', time:'10 min', ut:['panela'],
    ing:[{fid:'aveia',q:50},{fid:'leitepo',q:30},{fid:'banana',q:1}], extra:'água, canela',
@@ -780,7 +781,7 @@ const RECIPES=[
    ing:[{fid:'figado',q:130},{fid:'azeite',q:5}], extra:'cebola, sal, limão',
    steps:'Tempere o fígado com sal e limão. Doure a cebola no azeite, suba o fogo e sele o fígado ~2 min por lado — cozinhar demais deixa duro.'},
   {id:'strogo', name:'Strogonoff leve de frango', time:'30 min', ut:['panela','frigideira'],
-   ing:[{fid:'frango',q:130},{fid:'iogurte',q:1},{fid:'arroz',q:150}], extra:'tomate, cebola, sal',
+   ing:[{fid:'frango',q:130},{fid:'iogurte',q:160},{fid:'arroz',q:150}], extra:'tomate, cebola, sal',
    steps:'Doure o frango em cubos, junte cebola e tomate picados e cozinhe até desmanchar. Desligue o fogo e misture o iogurte (não ferver!). Sirva com arroz.'},
   {id:'arrozforno', name:'Arroz de forno com frango', time:'40 min', ut:['forno'],
    ing:[{fid:'arroz',q:150},{fid:'frango',q:100},{fid:'vegetais',q:100},{fid:'ovo',q:1}], extra:'sal, temperos',
@@ -804,7 +805,7 @@ const RECIPES=[
    ing:[{fid:'aveia',q:60},{fid:'ovo',q:1},{fid:'maca',q:1},{fid:'banana',q:1}], extra:'canela, fermento',
    steps:'Amasse a banana, misture o ovo, a aveia, a maçã picada e uma pitada de fermento. Asse em forminhas a 180 °C por ~20 min.'},
   {id:'iogfrutas', name:'Bowl de iogurte com frutas', time:'5 min', ut:[],
-   ing:[{fid:'iogurte',q:1},{fid:'banana',q:1},{fid:'maca',q:1},{fid:'aveia',q:20}], extra:'',
+   ing:[{fid:'iogurte',q:160},{fid:'banana',q:1},{fid:'maca',q:1},{fid:'aveia',q:20}], extra:'',
    steps:'Monte o pote: iogurte no fundo, frutas picadas e aveia por cima. Pronto.'},
   {id:'arrozmexido', name:'Arroz mexido com ovo e legumes', time:'15 min', ut:['frigideira'],
    ing:[{fid:'arroz',q:150},{fid:'ovo',q:2},{fid:'vegetais',q:100},{fid:'azeite',q:5}], extra:'alho, sal',
@@ -820,7 +821,7 @@ const BASE_ROWS = [
   {key:'cafe_banana',   meal:'Café da manhã', foodId:'banana',   qty:1,   times:c=>c.cafeFreq*4/7, timesLabel:c=>'~'+Math.round(c.cafeFreq*4/7)+'×/sem'},
   {key:'cafe_maca',     meal:'Café da manhã', foodId:'maca',     qty:1,   times:c=>c.cafeFreq*3/7, timesLabel:c=>'~'+Math.round(c.cafeFreq*3/7)+'×/sem'},
   {key:'cafe_aveia',    meal:'Café da manhã', foodId:'aveia',    qty:50,  times:c=>c.cafeFreq,   timesLabel:c=>c.cafeFreq+'×/sem'},
-  {key:'lan_iogurte',   meal:'Lanche',        foodId:'iogurte',  qty:1,   times:c=>c.lancheFreq, timesLabel:c=>c.lancheFreq+'×/sem'},
+  {key:'lan_iogurte',   meal:'Lanche',        foodId:'iogurte',  qty:160, times:c=>c.lancheFreq, timesLabel:c=>c.lancheFreq+'×/sem'},
   {key:'lan_maca',      meal:'Lanche',        foodId:'maca',     qty:1,   times:c=>c.lancheFreq, timesLabel:c=>c.lancheFreq+'×/sem'},
   {key:'lan_banana',    meal:'Lanche',        foodId:'banana',   qty:1,   times:c=>c.lancheFreq, timesLabel:c=>c.lancheFreq+'×/sem'},
   {key:'lan_leitepo',   meal:'Lanche',        foodId:'leitepo',  qty:30,  times:c=>c.lancheFreq, timesLabel:c=>c.lancheFreq+'×/sem'},
@@ -923,8 +924,11 @@ function migrate(s){
     customFoods:Array.isArray(s.customFoods)?s.customFoods:[],
     extraRows:Array.isArray(s.extraRows)?s.extraRows:[],
     stores:Array.isArray(s.stores)?s.stores:[],
-    prices:{}, checked:s.checked||{}, updatedAt:s.updatedAt||0
+    prices:{}, checked:s.checked||{}, updatedAt:s.updatedAt||0,
+    migIog:!!s.migIog
   };
+  const iogScale=480/170;
+  const needIog=!out.migIog && s.prices && Object.values(s.prices).some(ps=>ps&&ps.iogurte);
   Object.keys(s.prices||{}).forEach(sid=>{
     out.prices[sid]={};
     Object.keys(s.prices[sid]||{}).forEach(fid=>{
@@ -932,8 +936,17 @@ function migrate(s){
       const v=s.prices[sid][fid];
       if(typeof v==='number') out.prices[sid][fid]={p:v,h:[{d:todayISO(),p:v}]};
       else if(v&&typeof v==='object') out.prices[sid][fid]={p:v.p||0,h:Array.isArray(v.h)?v.h:[]};
+      if(needIog&&fid==='iogurte'&&out.prices[sid][fid]){
+        const e=out.prices[sid][fid];
+        e.p=+(e.p*iogScale).toFixed(2);
+        e.h.forEach(x=>{ x.p=+(x.p*iogScale).toFixed(2); });
+      }
     });
   });
+  out.migIog=true;
+  if(out.qtyOv['lan_iogurte']!=null&&out.qtyOv['lan_iogurte']<=5) out.qtyOv['lan_iogurte']*=160;
+  (out.dishes||[]).forEach(d=>(d.items||[]).forEach(it=>{ if(it.fid==='iogurte'&&it.qty<=5) it.qty*=160; }));
+  Object.values(out.adhoc||{}).forEach(list=>(list||[]).forEach(a=>{ if(a.fid==='iogurte'&&a.qty<=5) a.qty*=160; }));
   return out;
 }
 function localLoad(){
@@ -1535,6 +1548,42 @@ function renderDeals(){
       <div class="cardnote">Custo por porção usando o melhor preço de cada ingrediente entre seus mercados.</div>
     </div>`:''}`;
 }
+function renderCostBreakdown(){
+  const wrap=$('costWrap'); if(!wrap) return;
+  wrap.innerHTML='';
+  const weekly=computeWeekly();
+  const items=[], missing=[];
+  allFoods().forEach(f=>{
+    const qty=monthlyBuyQty(f.id,weekly);
+    if(qty<=0) return;
+    const bp=bestPrice(f.id);
+    if(bp) items.push({f, cost:qty*bp.price});
+    else missing.push(f.name);
+  });
+  if(!items.length) return;
+  items.sort((a,b)=>b.cost-a.cost);
+  const total=items.reduce((a,x)=>a+x.cost,0);
+  const max=items[0].cost;
+  let bars='';
+  items.forEach(x=>{
+    const pct=x.cost/total*100;
+    bars+=`
+      <div class="srcbar" style="cursor:pointer;" onclick="openAssoc('${x.f.id}')">
+        <span class="sname">${esc(trunc(x.f.name,14))}</span>
+        <div class="strack"><div style="width:${(x.cost/max*100).toFixed(1)}%"></div></div>
+        <span class="spct">${fmtMoney(x.cost)} · ${pct.toFixed(0)}%</span>
+      </div>`;
+  });
+  wrap.innerHTML=`
+    <div class="lcard">
+      <div class="cardtitle">💸 Onde vai o dinheiro — mês</div>
+      <div style="padding:8px 20px 4px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:20px; padding-bottom:8px;">${fmtMoney(total)} <span style="font-size:11px; color:var(--ink2); font-weight:600;">/ mês (melhores preços)</span></div>
+        ${bars}
+      </div>
+      <div class="cardnote">Custo mensal de cada item da dieta pelo melhor preço entre seus mercados. Toque numa barra para ver as marcas do item.${missing.length?' <b style="color:var(--orange)">Sem preço (fora do total): '+esc(missing.join(', '))+'.</b>':''}</div>
+    </div>`;
+}
 function renderMixed(){
   const wrap=$('mixedWrap');
   wrap.innerHTML='';
@@ -1676,7 +1725,7 @@ function weekPlanData(){
     else meals.push({meal:'almoco', out:true, items:[]});
     if(D.lanche.includes(day)){
       meals.push({meal:'lanche', items:[
-        !state.offRows['lan_iogurte'] && {fid:'iogurte', qty:rowQty('lan_iogurte',1)},
+        !state.offRows['lan_iogurte'] && {fid:'iogurte', qty:rowQty('lan_iogurte',160)},
         !state.offRows['lan_maca'] && {fid:'maca', qty:rowQty('lan_maca',1)},
         !state.offRows['lan_banana'] && {fid:'banana', qty:rowQty('lan_banana',1)},
         !state.offRows['lan_leitepo'] && {fid:'leitepo', qty:rowQty('lan_leitepo',30)}
@@ -3004,7 +3053,7 @@ function removeAssoc(fid){
 
 /* ==================== IMPORTAR LISTA COLADA ==================== */
 /* peso típico (g) da unidade de consumo dos alimentos "un/fatia" — p/ converter preço por kg */
-const UNIT_G={banana:120, maca:130, iogurte:170, ovo:60, pao:25};
+const UNIT_G={banana:120, maca:130, ovo:60, pao:25};
 function parseSize(desc){
   const d=normTxt(desc);
   let m=d.match(/(\d+[.,]?\d*)\s*KG\b/);
@@ -3475,6 +3524,7 @@ function render(){
   renderNutriBalance();
   renderList();
   renderMixed();
+  renderCostBreakdown();
   renderDeals();
   renderStores();
 }
