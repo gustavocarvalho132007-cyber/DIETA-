@@ -711,7 +711,7 @@ details.help code{background:var(--fill); border-radius:5px; padding:1px 5px; fo
 <script>
 /* ==================== DADOS BASE ==================== */
 /* kcal / prot por unidade de consumo (un, fatia ou g) — aprox. TACO/USDA, cru */
-const APP_VERSION='4.0';
+const APP_VERSION='4.1';
 const APP_BUILD='2026-08-18';
 const FOODS = [
   {id:'ovo',      name:'Ovo',                   unit:'un',    buyUnit:'dúzia',              factor:12,   kcal:70,   prot:6.3,
@@ -732,7 +732,7 @@ const FOODS = [
    micro:{fib:0,    fe:0,     ca:0,    mg:0,    zn:0,     k:0,    va:0,   vc:0,    b12:0,    fol:0}},
   {id:'vegetais', name:'Vegetais (mix)',        unit:'g',     buyUnit:'kg',                 factor:1000, kcal:0.35, prot:0.025,
    micro:{fib:0.028,fe:0.006, ca:0.45, mg:0.15, zn:0.004, k:2.9,  va:2.4, vc:0.55, b12:0,    fol:0.5}},
-  {id:'iogurte',  name:'Iogurte',               unit:'un',    buyUnit:'un',                 factor:1,    kcal:100,  prot:6.0,
+  {id:'iogurte',  name:'Iogurte',               unit:'un',    buyUnit:'pote 170 g',         factor:1,    kcal:100,  prot:6.0,
    micro:{fib:0,    fe:0.1,   ca:245,  mg:20,   zn:1.0,   k:260,  va:40,  vc:1,    b12:0.6,  fol:12}},
   {id:'leitepo',  name:'Leite em pó',           unit:'g',     buyUnit:'kg',                 factor:1000, kcal:4.97, prot:0.263,
    micro:{fib:0,    fe:0.005, ca:9.12, mg:0.85, zn:0.033, k:13.2, va:2.58,vc:0.05, b12:0.03, fol:0.05}},
@@ -1485,7 +1485,7 @@ function renderDeals(){
             ? `<b style="color:var(--tint-text)">${esc(r.best.s.name)}</b>${fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':''} · ${r.byDist? 'quase empate — vence por ser mais perto' : (r.pct>=1? r.pct.toFixed(0)+'% mais barato que '+esc(trunc(r.worst.s.name,16)) : 'empate entre mercados')}`
             : 'só em '+esc(r.best.s.name)+(fmtDist(r.best.s)?' ('+fmtDist(r.best.s)+')':'')}</div>
         </div>
-        <div class="buyqty">${fmtMoney(r.best.p)}<small class="normtag">${norm||('/'+esc(r.f.buyUnit))}</small></div>
+        <div class="buyqty">${fmtMoney(r.best.p)}<small>por ${esc(r.f.buyUnit)}</small>${norm?`<small class="normtag">${norm}</small>`:''}</div>
       </div>`;
   });
   /* receitas por custo, usando melhores preços */
@@ -2561,8 +2561,11 @@ function confirmPairShare(){
 /* ==================== FASE 1: NORMALIZADO / TROCA / SCANNER ==================== */
 function normPrice(f, p){
   if(!f || p<=0) return '';
-  if(f.unit==='g') return fmtMoney(p/f.factor*100)+'/100g';
-  if(f.factor!==1) return fmtMoney(p/f.factor)+'/'+f.unit;
+  if(f.unit==='g') return fmtMoney(p/f.factor*1000)+'/kg';
+  if(/\bkg\b/i.test(f.buyUnit)) return fmtMoney(p/f.factor)+'/'+f.unit;      /* frutas: preço já é por kg → mostra /un */
+  if(f.factor!==1) return fmtMoney(p/f.factor)+'/'+f.unit;                     /* ovo (dúzia), pão (pacote) */
+  const w=UNIT_G[f.id]||(/(\d+)\s*g/i.test(f.buyUnit)?parseFloat(f.buyUnit.match(/(\d+)\s*g/i)[1]):null);
+  if(w) return fmtMoney(p/w*1000)+'/kg';                                       /* iogurte e afins: por kg */
   return '';
 }
 /* custo do g de proteína usando o melhor preço do item */
